@@ -51,9 +51,14 @@ async function testConnection() {
   try {
     let base = (baseUrl.value || "https://api.openai.com").replace(/\/$/, "");
     
-    // 尝试多个常见路径
-    const paths = ["/chat/completions", "/v1/chat/completions"];
-    let lastErr = "";
+    // 智能选择路径：避免 /v1 重复
+    let paths: string[];
+    if (/\/v1$/.test(base)) {
+      paths = ["/chat/completions"];
+    } else {
+      paths = ["/chat/completions", "/v1/chat/completions"];
+    }
+    let errs: string[] = [];
     let ok = false;
 
     for (const p of paths) {
@@ -73,16 +78,16 @@ async function testConnection() {
         });
         if (res.ok) { ok = true; break; }
         const errBody = await res.text().catch(() => "");
-        lastErr = `${url} → HTTP ${res.status}: ${errBody.substring(0, 80)}`;
+        errs.push(url + " HTTP " + res.status + ": " + errBody.substring(0, 80));
       } catch (e: any) {
-        lastErr = `${url} → ${e.message}`;
+        errs.push(url + " " + e.message);
       }
     }
 
     if (ok) {
       success.value = true;
     } else {
-      error.value = lastErr;
+      error.value = errs.join(" | ");
     }
   } catch (e: any) {
     error.value = "连接失败: " + e.message;

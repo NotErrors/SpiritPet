@@ -112,8 +112,14 @@ export async function chat(userInput: string): Promise<string> {
 
   try {
     let base = pet.baseUrl.replace(/\/$/, "");
-    const paths = ["/chat/completions", "/v1/chat/completions"];
-    let lastErr = "";
+    let paths: string[];
+    // 如果 base URL 已有 /v1 路径，不加重复的 v1
+    if (/\/v1$/.test(base)) {
+      paths = ["/chat/completions"];
+    } else {
+      paths = ["/chat/completions", "/v1/chat/completions"];
+    }
+    let errs: string[] = [];
     let data: any = null;
 
     for (const p of paths) {
@@ -132,13 +138,13 @@ export async function chat(userInput: string): Promise<string> {
           break;
         }
         const errBody = await res.text().catch(() => "");
-        lastErr = url + " HTTP " + res.status + ": " + errBody.substring(0, 80);
+        errs.push(url + " → HTTP " + res.status + ": " + errBody.substring(0, 80));
       } catch (e: any) {
-        lastErr = url + " " + e.message;
+        errs.push(url + " → " + e.message);
       }
     }
 
-    if (!data) throw new Error(lastErr);
+    if (!data) throw new Error(errs.join(" | "));
 
     const reply = data.choices?.[0]?.message?.content || "(no response)";
 
