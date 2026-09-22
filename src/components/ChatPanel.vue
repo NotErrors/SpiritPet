@@ -57,8 +57,8 @@ watch(() => pet.messages.length, async () => {
 
 <style scoped>
 .chat-panel {
-  width: 280px;
-  height: 360px;
+  width: 260px;
+  height: 280px;
   background: rgba(30, 30, 30, 0.95);
   border-radius: 12px;
   display: flex;

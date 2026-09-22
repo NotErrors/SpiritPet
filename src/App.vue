@@ -23,6 +23,7 @@
       <div class="pet-area" @click="toggleChat">
         <!-- 蛋阶段 -->
         <Egg v-if="stage === 'egg'" :intimacy="intimacy" @click="toggleChat" />
+        <div class="click-hint" v-if="stage === 'egg' && !chatOpen">💡 点击蛋开始聊天</div>
         
         <!-- 宠物阶段 -->
         <Pet
@@ -232,9 +233,10 @@ html, body, #app {
 
 .chat-wrapper {
   position: fixed;
-  bottom: 80px;
-  left: 10px;
+  left: 0;
+  top: 30px;
   z-index: 100;
+  -webkit-app-region: no-drag;
 }
 
 /* 破壳通知 */
@@ -275,6 +277,18 @@ html, body, #app {
 .hatch-mbti { font-size: 16px; color: #aaa; margin-bottom: 16px; }
 .hatch-mbti strong { color: #fff; font-size: 20px; }
 .hatch-tip { font-size: 12px; color: #666; }
+
+.click-hint {
+  font-size: 10px;
+  color: rgba(255,255,255,0.4);
+  margin-top: 4px;
+  animation: pulse-hint 2s ease-in-out infinite;
+  -webkit-app-region: no-drag;
+}
+@keyframes pulse-hint {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
 
 /* 退出确认弹框 */
 .confirm-overlay {
