@@ -45,6 +45,19 @@
       </div>
 
       <!-- 破壳通知 -->
+      <!-- 退出确认弹框 -->
+      <div v-if="showConfirmExit" class="confirm-overlay" @click="showConfirmExit = false">
+        <div class="confirm-dialog" @click.stop>
+          <div class="confirm-icon">👋</div>
+          <div class="confirm-text">确定要离开吗？</div>
+          <div class="confirm-sub">你的 SpiritPet 会想你的</div>
+          <div class="confirm-actions">
+            <button class="confirm-cancel" @click="showConfirmExit = false">取消</button>
+            <button class="confirm-ok" @click="doExit">确定退出</button>
+          </div>
+        </div>
+      </div>
+
       <div v-if="showHatchNotice" class="hatch-notice" @click="showHatchNotice = false">
         <div class="hatch-card">
           <div class="hatch-icon">🐣</div>
@@ -73,6 +86,7 @@ const showHatchNotice = ref(false);
 const showMenu = ref(false);
 const menuX = ref(0);
 const menuY = ref(0);
+const showConfirmExit = ref(false);
 
 // 右键菜单位置
 function onContextMenu(e: MouseEvent) {
@@ -81,13 +95,17 @@ function onContextMenu(e: MouseEvent) {
   showMenu.value = true;
 }
 
-async function closeApp() {
+function closeApp() {
+  showConfirmExit.value = true;
+}
+
+async function doExit() {
+  showConfirmExit.value = false;
   try {
-    const { getCurrentWindow } = await import("@tauri-apps/api/window");
-    await getCurrentWindow().close();
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("exit_app");
   } catch {
-    // fallback: if running in browser dev mode
-    window.close();
+    try { window.close(); } catch {}
   }
 }
 
@@ -193,17 +211,16 @@ html, body, #app {
 .app {
   width: 100%;
   height: 100%;
-  -webkit-app-region: drag;
-}
-.window-controls, .settings-overlay, .chat-wrapper, .pet-area, .hatch-notice {
-  -webkit-app-region: no-drag;
-}
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
   padding-bottom: 10px;
   position: relative;
+  -webkit-app-region: drag;
+}
+.window-controls, .settings-overlay, .chat-wrapper, .pet-area, .hatch-notice {
+  -webkit-app-region: no-drag;
 }
 
 .pet-area {
@@ -258,4 +275,41 @@ html, body, #app {
 .hatch-mbti { font-size: 16px; color: #aaa; margin-bottom: 16px; }
 .hatch-mbti strong { color: #fff; font-size: 20px; }
 .hatch-tip { font-size: 12px; color: #666; }
+
+/* 退出确认弹框 */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  -webkit-app-region: no-drag;
+}
+.confirm-dialog {
+  background: #1e1e1e;
+  border-radius: 16px;
+  padding: 32px;
+  text-align: center;
+  color: #eee;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+  width: 260px;
+}
+.confirm-icon { font-size: 48px; margin-bottom: 12px; }
+.confirm-text { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+.confirm-sub { font-size: 12px; color: #888; margin-bottom: 24px; }
+.confirm-actions { display: flex; gap: 10px; }
+.confirm-actions button {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  font-size: 13px;
+  cursor: pointer;
+}
+.confirm-cancel { background: #333; color: #ccc; }
+.confirm-cancel:hover { background: #444; }
+.confirm-ok { background: #e53935; color: white; }
+.confirm-ok:hover { background: #c62828; }
 </style>
