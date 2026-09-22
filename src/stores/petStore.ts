@@ -111,21 +111,35 @@ export async function chat(userInput: string): Promise<string> {
   });
 
   try {
-    const res = await fetch(`${pet.baseUrl}/v1/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${pet.apiKey}`,
-      },
-      body,
-    });
+    let base = pet.baseUrl.replace(/\/$/, "");
+    const paths = ["/chat/completions", "/v1/chat/completions"];
+    let lastErr = "";
+    let data: any = null;
 
-    if (!res.ok) {
-      const err = await res.text().catch(() => "Unknown error");
-      throw new Error(`API error ${res.status}: ${err}`);
+    for (const p of paths) {
+      const url = base + p;
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + pet.apiKey,
+          },
+          body,
+        });
+        if (res.ok) {
+          data = await res.json();
+          break;
+        }
+        const errBody = await res.text().catch(() => "");
+        lastErr = url + " HTTP " + res.status + ": " + errBody.substring(0, 80);
+      } catch (e: any) {
+        lastErr = url + " " + e.message;
+      }
     }
 
-    const data = await res.json();
+    if (!data) throw new Error(lastErr);
+
     const reply = data.choices?.[0]?.message?.content || "(no response)";
 
     addMessage("assistant", reply);
@@ -136,7 +150,7 @@ export async function chat(userInput: string): Promise<string> {
 
     return reply;
   } catch (e: any) {
-    const errMsg = `[错误] ${e.message}`;
+    const errMsg = "[错误] " + e.message;
     addMessage("assistant", errMsg);
     return errMsg;
   }
