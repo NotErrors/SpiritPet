@@ -50,10 +50,23 @@ async function testConnection() {
   success.value = false;
   try {
     const url = (baseUrl.value || "https://api.openai.com").replace(/\/$/, "");
-    const res = await fetch(url + "/v1/models", {
-      headers: { Authorization: "Bearer " + key.value },
+    // 用 Chat Completions 测试，兼容所有 OpenAI 格式 API
+    const res = await fetch(url + "/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + key.value,
+      },
+      body: JSON.stringify({
+        model: model.value || "gpt-4o-mini",
+        messages: [{ role: "user", content: "hi" }],
+        max_tokens: 1,
+      }),
     });
-    if (!res.ok) throw new Error("HTTP " + res.status);
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status}: ${errBody.substring(0, 100)}`);
+    }
     success.value = true;
   } catch (e: any) {
     error.value = "连接失败: " + e.message;
