@@ -1,5 +1,11 @@
 <template>
-  <div class="app">
+  <div class="app" @contextmenu.prevent="onContextMenu" @click="showMenu = false">
+    
+    <!-- 右键菜单 -->
+    <div v-if="showMenu" class="context-menu" @click.stop
+      :style="{ left: menuX + 'px', top: menuY + 'px' }">
+      <div class="menu-item" @click="closeApp">✕ 退出 SpiritPet</div>
+    </div>
     <!-- 没有 API Key 时显示设置 -->
     <Settings
       v-if="!hasApiKey"
@@ -47,7 +53,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { ref, watch, onMounted, onUnmounted } from "vue";
 import { pet, hasApiKey, mbtiColor, tryHatch, type Message } from "./stores/petStore";
 import Egg from "./components/Egg.vue";
 import Pet from "./components/Pet.vue";
@@ -59,6 +65,38 @@ const intimacy = ref(pet.intimacy);
 const mbti = ref(pet.mbti);
 const chatOpen = ref(false);
 const showHatchNotice = ref(false);
+const showMenu = ref(false);
+const menuX = ref(0);
+const menuY = ref(0);
+
+// 右键菜单位置
+function onContextMenu(e: MouseEvent) {
+  menuX.value = e.clientX;
+  menuY.value = e.clientY;
+  showMenu.value = true;
+}
+
+async function closeApp() {
+  try {
+    const { getCurrentWindow } = await import("@tauri-apps/api/window");
+    await getCurrentWindow().close();
+  } catch {
+    // fallback: if running in browser dev mode
+    window.close();
+  }
+}
+
+// Escape 键关闭菜单或退出
+function onKeyDown(e: KeyboardEvent) {
+  if (e.key === "Escape") {
+    if (showMenu.value) {
+      showMenu.value = false;
+    }
+  }
+}
+
+onMounted(() => window.addEventListener("keydown", onKeyDown));
+onUnmounted(() => window.removeEventListener("keydown", onKeyDown));
 
 // Watch intimacy changes for auto-hatch
 watch(() => pet.intimacy, (val) => {
@@ -95,6 +133,28 @@ html, body, #app {
   height: 100%;
   overflow: hidden;
   background: transparent;
+}
+
+.context-menu {
+  position: fixed;
+  background: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 4px 0;
+  z-index: 9999;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  min-width: 140px;
+}
+.menu-item {
+  padding: 8px 16px;
+  color: #ddd;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.menu-item:hover {
+  background: #1976d2;
+  color: white;
 }
 
 .app {

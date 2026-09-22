@@ -10,12 +10,8 @@
       </div>
       <div class="field">
         <label>Model</label>
-        <select v-model="model">
-          <option value="gpt-4o-mini">GPT-4o-mini (推荐)</option>
-          <option value="gpt-4o">GPT-4o</option>
-          <option value="deepseek-chat">DeepSeek Chat</option>
-          <option value="qwen-turbo">通义千问 Turbo</option>
-        </select>
+        <input v-model="model" placeholder="gpt-4o-mini / deepseek-chat / 自定义模型名" />
+        <div class="hint">常用模型：gpt-4o-mini · deepseek-chat · qwen-turbo</div>
       </div>
       <div class="field">
         <label>Base URL</label>
@@ -83,7 +79,9 @@ function save() {
   z-index: 1000;
 }
 .settings-panel {
-  width: 340px;
+  width: 360px;
+  max-height: 90vh;
+  overflow-y: auto;
   background: #1e1e1e;
   border-radius: 12px;
   padding: 24px;
@@ -105,6 +103,7 @@ h2 { font-size: 18px; margin-bottom: 4px; }
   outline: none;
 }
 .field input:focus, .field select:focus { border-color: #1976d2; }
+.hint { color: #666; font-size: 11px; margin-top: 4px; }
 .error { color: #ef5350; font-size: 12px; margin-bottom: 10px; }
 .success { color: #66bb6a; font-size: 12px; margin-bottom: 10px; }
 .actions { display: flex; gap: 8px; margin-top: 16px; }
