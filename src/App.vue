@@ -1,6 +1,11 @@
 <template>
   <div class="app" @contextmenu.prevent="onContextMenu" @click="showMenu = false">
     
+    <!-- 窗口控制按钮 -->
+    <div class="window-controls">
+      <div class="win-btn close" @click.stop="closeApp" title="关闭">✕</div>
+    </div>
+    
     <!-- 右键菜单 -->
     <div v-if="showMenu" class="context-menu" @click.stop
       :style="{ left: menuX + 'px', top: menuY + 'px' }">
@@ -135,6 +140,34 @@ html, body, #app {
   background: transparent;
 }
 
+.window-controls {
+  position: fixed;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 4px;
+  z-index: 999;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+.window-controls:hover { opacity: 1; }
+.win-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  cursor: pointer;
+  user-select: none;
+}
+.win-btn.close {
+  background: rgba(255, 70, 70, 0.8);
+  color: white;
+}
+.win-btn.close:hover { background: rgb(255, 70, 70); }
+
 .context-menu {
   position: fixed;
   background: #2a2a2a;
@@ -160,6 +193,11 @@ html, body, #app {
 .app {
   width: 100%;
   height: 100%;
+  -webkit-app-region: drag;
+}
+.window-controls, .settings-overlay, .chat-wrapper, .pet-area, .hatch-notice {
+  -webkit-app-region: no-drag;
+}
   display: flex;
   flex-direction: column;
   align-items: center;

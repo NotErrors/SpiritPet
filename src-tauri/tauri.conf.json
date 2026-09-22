@@ -14,14 +14,14 @@
       {
         "title": "SpiritPet",
         "label": "main",
-        "width": 200,
-        "height": 200,
+        "width": 280,
+        "height": 320,
         "x": 0,
         "y": 0,
         "decorations": false,
         "transparent": true,
         "alwaysOnTop": true,
-        "resizable": false,
+        "resizable": true,
         "skipTaskbar": true,
         "focus": false,
         "visible": true
