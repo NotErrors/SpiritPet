@@ -49,25 +49,41 @@ async function testConnection() {
   error.value = "";
   success.value = false;
   try {
-    const url = (baseUrl.value || "https://api.openai.com").replace(/\/$/, "");
-    // 用 Chat Completions 测试，兼容所有 OpenAI 格式 API
-    const res = await fetch(url + "/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + key.value,
-      },
-      body: JSON.stringify({
-        model: model.value || "gpt-4o-mini",
-        messages: [{ role: "user", content: "hi" }],
-        max_tokens: 1,
-      }),
-    });
-    if (!res.ok) {
-      const errBody = await res.text().catch(() => "");
-      throw new Error(`HTTP ${res.status}: ${errBody.substring(0, 100)}`);
+    let base = (baseUrl.value || "https://api.openai.com").replace(/\/$/, "");
+    
+    // 尝试多个常见路径
+    const paths = ["/chat/completions", "/v1/chat/completions"];
+    let lastErr = "";
+    let ok = false;
+
+    for (const p of paths) {
+      const url = base + p;
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + key.value,
+          },
+          body: JSON.stringify({
+            model: model.value || "gpt-4o-mini",
+            messages: [{ role: "user", content: "hi" }],
+            max_tokens: 1,
+          }),
+        });
+        if (res.ok) { ok = true; break; }
+        const errBody = await res.text().catch(() => "");
+        lastErr = `${url} → HTTP ${res.status}: ${errBody.substring(0, 80)}`;
+      } catch (e: any) {
+        lastErr = `${url} → ${e.message}`;
+      }
     }
-    success.value = true;
+
+    if (ok) {
+      success.value = true;
+    } else {
+      error.value = lastErr;
+    }
   } catch (e: any) {
     error.value = "连接失败: " + e.message;
   } finally {
