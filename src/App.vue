@@ -10,6 +10,7 @@
     <div v-if="showMenu" class="context-menu" @click.stop
       :style="{ left: menuX + 'px', top: menuY + 'px' }">
       <div class="menu-item" @click="openChat">💬 聊天</div>
+      <div class="menu-item" @click="restart">🔄 重新养一只</div>
       <div class="menu-item" @click="openSettings">⚙ 设置</div>
       <div class="menu-item" @click="closeApp">✕ 退出 SpiritPet</div>
     </div>
@@ -61,31 +62,32 @@
         </div>
       </div>
 
-      <div v-if="showHatchNotice" class="hatch-notice" @click="showHatchNotice = false">
-        <div class="hatch-card">
-          <div class="hatch-icon">🐣</div>
-          <div class="hatch-title">新生命诞生了！</div>
-          <div class="hatch-mbti">它是个 <strong>{{ mbti }}</strong></div>
-          <div class="hatch-tip">点击关闭</div>
-        </div>
-      </div>
+      <!-- 破壳仪式：蛋摇晃裂开 → 碎壳飞散 → 宠物诞生 -->
+      <HatchCeremony
+        v-if="showCeremony"
+        :mbti="mbti"
+        :color="mbtiColor"
+        @burst="commitHatch"
+        @done="onCeremonyDone"
+      />
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from "vue";
-import { pet, hasApiKey, mbtiColor, tryHatch, petTouch, type Message } from "./stores/petStore";
+import { pet, hasApiKey, mbtiColor, tryHatch, petTouch, resetPet, type Message } from "./stores/petStore";
 import Egg from "./components/Egg.vue";
 import Pet from "./components/Pet.vue";
 import ChatPanel from "./components/ChatPanel.vue";
 import Settings from "./components/Settings.vue";
+import HatchCeremony from "./components/HatchCeremony.vue";
 
 const stage = ref(pet.stage);
 const intimacy = ref(pet.intimacy);
 const mbti = ref(pet.mbti);
 const chatOpen = ref(false);
-const showHatchNotice = ref(false);
+const showCeremony = ref(false);
 const showMenu = ref(false);
 const menuX = ref(0);
 const menuY = ref(0);
@@ -130,15 +132,39 @@ function onKeyDown(e: KeyboardEvent) {
 onMounted(() => window.addEventListener("keydown", onKeyDown));
 onUnmounted(() => window.removeEventListener("keydown", onKeyDown));
 
-// Watch intimacy changes for auto-hatch
+// 亲密度达标 → 播破壳仪式
+// 注意：这里先不真的破壳，要等仪式播到「爆裂」那一刻才提交状态，
+// 否则蛋会在用户看到之前就消失，整个仪式就没意义了
 watch(() => pet.intimacy, (val) => {
   intimacy.value = val;
+  if (pet.stage === "egg" && val >= 30 && !showCeremony.value) {
+    showCeremony.value = true;
+  }
+});
+
+/** 仪式播到爆裂瞬间：此刻才正式提交破壳 */
+function commitHatch() {
   if (tryHatch()) {
     stage.value = "pet";
     mbti.value = pet.mbti;
-    showHatchNotice.value = true;
+    chatOpen.value = false;
   }
-});
+}
+
+/** 重新养一只：回到蛋阶段 */
+function restart() {
+  showMenu.value = false;
+  resetPet();
+  stage.value = "egg";
+  mbti.value = null;
+  intimacy.value = 0;
+  chatOpen.value = false;
+  showCeremony.value = false;
+}
+
+function onCeremonyDone() {
+  showCeremony.value = false;
+}
 
 // Watch for state changes from other components
 watch(() => pet.stage, (val) => { stage.value = val; });
@@ -264,7 +290,7 @@ html, body, #app {
   position: relative;
   -webkit-app-region: drag;
 }
-.window-controls, .settings-overlay, .chat-wrapper, .pet-area, .hatch-notice {
+.window-controls, .settings-overlay, .chat-wrapper, .pet-area {
   -webkit-app-region: no-drag;
 }
 
@@ -293,45 +319,6 @@ html, body, #app {
   z-index: 100;
   -webkit-app-region: no-drag;
 }
-
-/* 破壳通知 */
-.hatch-notice {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 999;
-  cursor: pointer;
-  animation: fadeIn 0.3s ease;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.hatch-card {
-  background: #1e1e1e;
-  border-radius: 16px;
-  padding: 40px;
-  text-align: center;
-  color: #eee;
-  box-shadow: 0 8px 40px rgba(0,0,0,0.5);
-  animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-@keyframes popIn {
-  from { transform: scale(0.5); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
-}
-
-.hatch-icon { font-size: 64px; margin-bottom: 16px; }
-.hatch-title { font-size: 22px; font-weight: 600; margin-bottom: 8px; }
-.hatch-mbti { font-size: 16px; color: #aaa; margin-bottom: 16px; }
-.hatch-mbti strong { color: #fff; font-size: 20px; }
-.hatch-tip { font-size: 12px; color: #666; }
 
 .click-hint {
   font-size: 10px;

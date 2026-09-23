@@ -71,6 +71,16 @@ export const mbtiColor = computed(() => getColor(pet.mbti));
 
 
 
+/** 重新养一只：清空进度回到蛋阶段 */
+export function resetPet() {
+  pet.stage = "egg";
+  pet.intimacy = 0;
+  pet.mbti = null;
+  pet.messages = [];
+  pet.lastPetTime = 0;
+  saveState(pet);
+}
+
 export function addIntimacy(amount: number) {
   pet.intimacy = Math.min(999, pet.intimacy + amount);
   saveState(pet);
