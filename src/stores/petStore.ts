@@ -1,4 +1,5 @@
 import { reactive, computed } from "vue";
+import { httpFetch } from "../lib/http";
 
 export interface Message {
   role: "user" | "assistant";
@@ -106,7 +107,7 @@ export async function callJevRouter(userInput: string): Promise<string | null> {
   try {
     const base = pet.jevBaseUrl.replace(/\/$/, "");
     const path = /\/v1$/.test(base) ? "/chat/completions" : "/v1/chat/completions";
-    const res = await fetch(base + path, {
+    const res = await httpFetch(base + path, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -177,7 +178,7 @@ export async function chat(userInput: string): Promise<string> {
     for (const p of paths) {
       const url = base + p;
       try {
-        const res = await fetch(url, {
+        const res = await httpFetch(url, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

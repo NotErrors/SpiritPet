@@ -46,6 +46,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { pet, saveConfig } from "../stores/petStore";
+import { httpFetch } from "../lib/http";
 
 const emit = defineEmits<{ close: []; saved: [] }>();
 
@@ -78,7 +79,7 @@ async function testConnection() {
     for (const p of paths) {
       const url = base + p;
       try {
-        const res = await fetch(url, {
+        const res = await httpFetch(url, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

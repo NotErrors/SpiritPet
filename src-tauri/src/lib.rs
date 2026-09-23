@@ -10,6 +10,7 @@ fn exit_app() {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_http::init())
         .invoke_handler(tauri::generate_handler![exit_app])
         .setup(|app| {
             // Get the main window and make it click-through
