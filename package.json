@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "gen:pets": "node scripts/gen-pets.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",

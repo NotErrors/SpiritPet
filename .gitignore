@@ -8,3 +8,9 @@ target/
 .DS_Store
 Thumbs.db
 src-tauri/.cargo/
+
+# 本地 API Key，绝对不要提交
+scripts/.tokenhub-key
+
+# 生图的原始大图（1024），成品在 public/pets/ 里
+assets/pets/raw/

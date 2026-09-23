@@ -16,9 +16,21 @@
 
     <!-- 外层：持续浮动（始终运行），内层：一次性动作 -->
     <div class="pet-float">
+      <!-- 优先用 AI 生成的插画 public/pets/{MBTI}.png；
+           文件不存在时 img 触发 error，自动回退到下面代码绘制的 SVG -->
+      <img
+        v-if="artOk"
+        class="pet-shape pet-img"
+        :class="[actionClass, { petting: petting }]"
+        :src="artSrc"
+        :alt="mbti"
+        draggable="false"
+        @error="artOk = false"
+      />
       <svg
+        v-else
         viewBox="0 0 100 100"
-        class="pet-svg"
+        class="pet-shape pet-svg"
         :class="[actionClass, { petting: petting }]"
       >
         <defs>
@@ -120,6 +132,11 @@ const props = defineProps<{
 }>();
 
 const containerEl = ref<HTMLElement | null>(null);
+
+// 插画资源。@error 会在文件缺失时把 artOk 置 false，
+// 于是自动用回代码绘制的 SVG —— 用户没跑生成脚本也能正常显示
+const artOk = ref(true);
+const artSrc = computed(() => "/pets/" + props.mbti + ".png");
 
 /** 每个实例用唯一的 gradient id，避免同页面多个宠物互相覆盖 */
 const uid = Math.random().toString(36).slice(2, 8);
@@ -264,13 +281,24 @@ onUnmounted(() => {
   transform-origin: 50% 85%;
 }
 
+/* 插画版与 SVG 版共用的动画基类 */
+.pet-shape {
+  display: block;
+  transform-origin: 50% 85%;
+  cursor: grab;
+  user-select: none;
+}
 .pet-svg {
   width: 76px;
   height: 76px;
-  display: block;
   overflow: visible;
-  transform-origin: 50% 85%;
-  cursor: grab;
+}
+.pet-img {
+  width: 92px;
+  height: 92px;
+  object-fit: contain;
+  -webkit-user-drag: none;
+  filter: drop-shadow(0 3px 7px rgba(0, 0, 0, 0.35));
 }
 
 /* ---------- 常驻浮动 ---------- */
@@ -280,10 +308,10 @@ onUnmounted(() => {
 }
 
 /* ---------- 自发动作（一次性的） ---------- */
-.pet-svg.act-hop    { animation: actHop 0.8s cubic-bezier(0.28, 1.4, 0.5, 1); }
-.pet-svg.act-wiggle { animation: actWiggle 0.95s ease-in-out; }
-.pet-svg.act-jelly  { animation: actJelly 0.85s ease-in-out; }
-.pet-svg.act-sleep  { animation: actSleep 3.2s ease-in-out; }
+.pet-shape.act-hop    { animation: actHop 0.8s cubic-bezier(0.28, 1.4, 0.5, 1); }
+.pet-shape.act-wiggle { animation: actWiggle 0.95s ease-in-out; }
+.pet-shape.act-jelly  { animation: actJelly 0.85s ease-in-out; }
+.pet-shape.act-sleep  { animation: actSleep 3.2s ease-in-out; }
 
 @keyframes actHop {
   0%   { transform: translateY(0) scale(1, 1); }
@@ -320,7 +348,7 @@ onUnmounted(() => {
 }
 
 /* ---------- 被抚摸：优先级最高（放最后覆盖同优先级动作） ---------- */
-.pet-svg.petting { animation: petHop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.pet-shape.petting { animation: petHop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
 
 @keyframes petHop {
   0%   { transform: translateY(0) scale(1) rotate(0deg); }
