@@ -1,0 +1,12 @@
+# 仓库内统一使用 LF 行尾。
+#
+# 为什么需要：Git for Windows 默认 core.autocrlf=true，会把检出到工作区的
+# 文本文件转成 CRLF，但这个仓库里提交的 blob 全是 LF。
+# 而 cargo / tauri 在构建时会把 Cargo.toml 和 gen/schemas/*.json 重新写成 LF，
+# 于是每次跑 npm run tauri dev 之后 git status 都会显示这几个文件"被修改"，
+# 但 git diff 又是空的（归一化后内容完全一致）。
+#
+# 后果不只是噪音：这类假脏文件会让 git rebase / checkout 直接失败。
+#
+# 显式声明 eol=lf 后，git 检出的就是 LF，与构建产物的行尾一致，问题消失。
+* text=auto eol=lf
