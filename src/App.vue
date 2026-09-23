@@ -9,6 +9,7 @@
     <!-- 右键菜单 -->
     <div v-if="showMenu" class="context-menu" @click.stop
       :style="{ left: menuX + 'px', top: menuY + 'px' }">
+      <div class="menu-item" @click="openChat">💬 聊天</div>
       <div class="menu-item" @click="openSettings">⚙ 设置</div>
       <div class="menu-item" @click="closeApp">✕ 退出 SpiritPet</div>
     </div>
@@ -21,10 +22,10 @@
 
     <!-- 有 API Key 时显示蛋/宠物 -->
     <template v-if="hasApiKey">
-      <div class="pet-area" @click="toggleChat">
+      <div class="pet-area" @click="onPetClick" @dblclick="onPetDblClick">
         <!-- 蛋阶段 -->
-        <Egg v-if="stage === 'egg'" :intimacy="intimacy" @click="toggleChat" />
-        <div class="click-hint" v-if="stage === 'egg' && !chatOpen">💡 点击蛋开始聊天</div>
+        <Egg v-if="stage === 'egg'" :intimacy="intimacy" :petting="petting" />
+        <div class="click-hint" v-if="!chatOpen">💡 单击抚摸 · 双击聊天</div>
         
         <!-- 宠物阶段 -->
         <Pet
@@ -32,7 +33,7 @@
           :color="mbtiColor"
           :mbti="mbti || '???'"
           :intimacy="intimacy"
-          @click="toggleChat"
+          :petting="petting"
         />
       </div>
 
@@ -74,7 +75,7 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from "vue";
-import { pet, hasApiKey, mbtiColor, tryHatch, type Message } from "./stores/petStore";
+import { pet, hasApiKey, mbtiColor, tryHatch, petTouch, type Message } from "./stores/petStore";
 import Egg from "./components/Egg.vue";
 import Pet from "./components/Pet.vue";
 import ChatPanel from "./components/ChatPanel.vue";
@@ -142,6 +143,42 @@ watch(() => pet.intimacy, (val) => {
 // Watch for state changes from other components
 watch(() => pet.stage, (val) => { stage.value = val; });
 watch(() => pet.mbti, (val) => { mbti.value = val; });
+
+let clickTimer: number | null = null;
+let petTimer: number | null = null;
+const petting = ref(false);
+
+/** 单击 = 抚摸（延时判定，避免与双击冲突） */
+function onPetClick() {
+  if (clickTimer !== null) return;
+  clickTimer = window.setTimeout(() => {
+    clickTimer = null;
+    doPet();
+  }, 240);
+}
+
+/** 双击 = 打开聊天 */
+function onPetDblClick() {
+  if (clickTimer !== null) {
+    clearTimeout(clickTimer);
+    clickTimer = null;
+  }
+  chatOpen.value = true;
+}
+
+/** 抚摸：播放动画，冷却期内不加亲密度 */
+function doPet() {
+  petting.value = true;
+  petTouch();
+  if (petTimer !== null) clearTimeout(petTimer);
+  petTimer = window.setTimeout(() => { petting.value = false; }, 1000);
+}
+
+/** 右键菜单：打开聊天 */
+function openChat() {
+  showMenu.value = false;
+  chatOpen.value = true;
+}
 
 function toggleChat() {
   chatOpen.value = !chatOpen.value;
@@ -236,6 +273,12 @@ html, body, #app {
   flex-direction: column;
   align-items: center;
   cursor: pointer;
+}
+/* 悬停变手型：覆盖窗口拖动区(drag)的默认光标 */
+.pet-area,
+.pet-area * {
+  cursor: pointer !important;
+  -webkit-app-region: no-drag;
 }
 
 .chat-wrapper {

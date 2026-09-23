@@ -18,6 +18,7 @@ interface PetState {
   jevKey: string;
   jevBaseUrl: string;
   chatOpen: boolean;
+  lastPetTime: number;
 }
 
 const MBTI_TYPES = [
@@ -64,6 +65,7 @@ export const pet = reactive<PetState>({
   model: saved.model || "gpt-4o-mini",
   baseUrl: saved.baseUrl || "https://api.openai.com",
   chatOpen: false,
+  lastPetTime: saved.lastPetTime || 0,
 });
 
 export const hasApiKey = computed(() => pet.apiKey.length > 0);
@@ -76,6 +78,25 @@ export const mbtiColor = computed(() => (pet.mbti ? MBTI_COLORS[pet.mbti] || "#9
 export function addIntimacy(amount: number) {
   pet.intimacy = Math.min(999, pet.intimacy + amount);
   saveState(pet);
+}
+
+/** 抚摸冷却时间（毫秒），防止连点刷亲密度 */
+const PET_COOLDOWN = 30_000;
+
+/**
+ * 抚摸宠物。
+ * @returns true = 本次增加了亲密度；false = 冷却中（只播放动画）
+ */
+export function petTouch(): boolean {
+  const now = Date.now();
+  if (now - pet.lastPetTime < PET_COOLDOWN) return false;
+  pet.lastPetTime = now;
+  if (pet.stage === "egg") {
+    addIntimacy(1);
+  } else {
+    saveState(pet);
+  }
+  return true;
 }
 
 export function tryHatch(): boolean {
