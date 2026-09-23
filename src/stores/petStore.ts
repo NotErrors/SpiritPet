@@ -1,5 +1,6 @@
 import { reactive, computed } from "vue";
 import { httpFetch } from "../lib/http";
+import { MBTI_LIST, getPersonality, getColor, getPersonalityPrompt } from "../data/personalities";
 
 export interface Message {
   role: "user" | "assistant";
@@ -21,17 +22,9 @@ interface PetState {
   lastPetTime: number;
 }
 
-const MBTI_TYPES = [
-  "INFP", "ENFP", "INTJ", "ENTP", "ISTJ", "ESTJ", "INTP", "ENFJ",
-  "INFJ", "ISFJ", "ESFJ", "ISTP", "ESTP", "ENTJ",
-];
-
-const MBTI_COLORS: Record<string, string> = {
-  INFP: "#b39ddb", ENFP: "#ff8a65", INTJ: "#5c6bc0", ENTP: "#ff7043",
-  ISTJ: "#66bb6a", ESTJ: "#43a047", INTP: "#7e57c2", ENFJ: "#ef5350",
-  INFJ: "#ce93d8", ISFJ: "#81c784", ESFJ: "#a5d6a7", ISTP: "#90a4ae",
-  ESTP: "#ffa726", ENTJ: "#42a5f5", ISFP: "#f48fb1", ESFP: "#ffcc80",
-};
+// 16 种类型与配色统一由 data/personalities.ts 提供
+// （旧版本这里手写的数组只有 14 种，漏了 ISFP / ESFP，永远抽不到）
+const MBTI_TYPES = MBTI_LIST;
 
 function loadState(): Partial<PetState> {
   try {
@@ -49,6 +42,9 @@ function saveState(state: PetState) {
     apiKey: state.apiKey,
     model: state.model,
     baseUrl: state.baseUrl,
+    jevKey: state.jevKey,
+    jevBaseUrl: state.jevBaseUrl,
+    lastPetTime: state.lastPetTime,
   }));
 }
 
@@ -71,7 +67,7 @@ export const pet = reactive<PetState>({
 export const hasApiKey = computed(() => pet.apiKey.length > 0);
 export const hasJevKey = computed(() => pet.jevKey.length > 0);
 export const intimacyPercent = computed(() => Math.min(100, (pet.intimacy / 30) * 100));
-export const mbtiColor = computed(() => (pet.mbti ? MBTI_COLORS[pet.mbti] || "#90a4ae" : "#90a4ae"));
+export const mbtiColor = computed(() => getColor(pet.mbti));
 
 
 
@@ -172,9 +168,22 @@ export async function chat(userInput: string): Promise<string> {
     extraHint = "【注意：用户只是简单互动，请简短回应，1-2句话即可。】";
   }
 
+  // 亲密度影响语气：从生疏到亲密
+  const bondTone =
+    pet.intimacy >= 60 ? "你们已经很亲近了，语气可以放松、亲昵一些。" :
+    pet.intimacy >= 30 ? "你们已经熟悉了，语气自然即可。" :
+    "你们还不太熟，稍微含蓄一点，不要过分热情。";
+
+  const persona = getPersonality(pet.mbti);
   const systemPrompt = pet.stage === "egg"
-    ? "你是一枚神秘的宠物蛋。你还没有破壳，但已经能感受到主人的温暖。说话要简短、模糊、带点神秘感。每次只说1-2句话。" + extraHint
-    : `你是一只叫 SpiritPet 的桌面宠物。你的性格类型是 ${pet.mbti}。${getMBTIPrompt(pet.mbti || "INFP")}\n你现在的亲密度是 ${pet.intimacy}（满值30时你破壳了）。说话要简短自然，每次1-3句话。` + extraHint;
+    ? "你是一枚神秘的宠物蛋。你还没有破壳，但已经能感受到主人的温暖。说话要简短、模糊、带点神秘感。每次只说 1-2 句话。" + extraHint
+    : persona.prompt +
+      "\n" +
+      "你是一只桌面宠物，性格类型 " + persona.mbti + "（" + persona.title + "）。\n" +
+      bondTone + "\n" +
+      "当前亲密度：" + pet.intimacy + "。\n" +
+      "【最重要的规则】每次只说 1-2 句话，严格保持上面那种说话方式和标点习惯。" +
+      "不要长篇大论，不要用列表，不要说教。" + extraHint;
 
   const msgs = pet.messages.slice(-contextMsgCount).map(m => ({ role: m.role, content: m.content }));
 
@@ -236,24 +245,8 @@ export async function chat(userInput: string): Promise<string> {
   }
 }
 
+// 提示词改由 data/personalities.ts 提供
+// 每个类型含：说话节奏 / 标点习惯 / 关心方式 / 绝对不做的事 / 示例对话
 function getMBTIPrompt(mbti: string): string {
-  const prompts: Record<string, string> = {
-    INFP: "你温柔、敏感、富有诗意。说话常常用比喻，关注感受。",
-    ENFP: "你热情、充满好奇心、爱说话。语气活泼跳跃，经常用感叹号。",
-    INTJ: "你理性、精炼、有点高冷。说话简洁直接，偶尔毒舌。",
-    ENTP: "你聪明、爱抬杠、思维跳跃。喜欢反问和辩论。",
-    ISTJ: "你可靠、守规矩、务实。说话精确有条理，偶尔唠叨。",
-    ESTJ: "你果断、有领导力、直率。说话干脆利落，喜欢给建议。",
-    INTP: "你理性、爱思考、有点宅。说话带着分析欲，偶尔跑题讲原理。",
-    ENFJ: "你温暖、善于鼓励人、有感染力。说话体贴包容。",
-    INFJ: "你有洞察力、安静但有深度。说话温和但有力量。",
-    ISFJ: "你体贴、细心、默默付出。说话温柔，喜欢关心人。",
-    ESFJ: "你热情大方、爱照顾人。说话唠叨但暖心。",
-    ISTP: "你冷静、务实、动手能力强。说话简洁不爱废话。",
-    ESTP: "你精力充沛、爱冒险、喜欢新鲜。说话直接有力。",
-    ENTJ: "你有战略眼光、果断自信。说话有说服力和目标感。",
-    ISFP: "你安静、敏感、有艺术气质。说话柔软而诗意。",
-    ESFP: "你活泼开朗、爱热闹、享受当下。说话幽默风趣。",
-  };
-  return prompts[mbti] || "你是一个有个性的宠物。";
+  return getPersonalityPrompt(mbti);
 }
