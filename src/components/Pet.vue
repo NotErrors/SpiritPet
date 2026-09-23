@@ -14,72 +14,95 @@
       >♥</span>
     </div>
 
-    <svg viewBox="0 0 100 100" class="pet-svg" :class="{ petting: petting }">
-      <defs>
-        <radialGradient :id="gid('body')" cx="35%" cy="28%" r="78%">
-          <stop offset="0%" :stop-color="lightColor" />
-          <stop offset="60%" :stop-color="color" />
-          <stop offset="100%" :stop-color="darkColor" />
-        </radialGradient>
-        <radialGradient :id="gid('blush')">
-          <stop offset="0%" stop-color="#ff8fb1" stop-opacity="0.85" />
-          <stop offset="100%" stop-color="#ff8fb1" stop-opacity="0" />
-        </radialGradient>
-        <filter :id="gid('glow')" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="2.5" result="b" />
-          <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
-        </filter>
-      </defs>
+    <!-- 外层：持续浮动（始终运行），内层：一次性动作 -->
+    <div class="pet-float">
+      <svg
+        viewBox="0 0 100 100"
+        class="pet-svg"
+        :class="[actionClass, { petting: petting }]"
+      >
+        <defs>
+          <radialGradient :id="gid('body')" cx="35%" cy="28%" r="78%">
+            <stop offset="0%" :stop-color="lightColor" />
+            <stop offset="60%" :stop-color="color" />
+            <stop offset="100%" :stop-color="darkColor" />
+          </radialGradient>
+          <radialGradient :id="gid('blush')">
+            <stop offset="0%" stop-color="#ff8fb1" stop-opacity="0.85" />
+            <stop offset="100%" stop-color="#ff8fb1" stop-opacity="0" />
+          </radialGradient>
+          <filter :id="gid('glow')" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="2.5" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
 
-      <!-- 落地阴影 -->
-      <ellipse cx="50" cy="90" rx="26" ry="4.5" fill="#000" opacity="0.13" />
+        <!-- 落地阴影（独立缩放，做出"跳起来影子变小"的错觉） -->
+        <ellipse
+          class="shadow"
+          :class="{ airborne: action === 'hop' }"
+          cx="50" cy="90" rx="26" ry="4.5"
+          fill="#000" opacity="0.14"
+        />
 
-      <!-- 身体 -->
-      <path
-        d="M50 20 C 70 20, 84 36, 84 55 C 84 74, 69 88, 50 88 C 31 88, 16 74, 16 55 C 16 36, 30 20, 50 20 Z"
-        :fill="'url(#' + gid('body') + ')'"
-      />
+        <!-- 身体 -->
+        <path
+          d="M50 20 C 70 20, 84 36, 84 55 C 84 74, 69 88, 50 88 C 31 88, 16 74, 16 55 C 16 36, 30 20, 50 20 Z"
+          :fill="'url(#' + gid('body') + ')'"
+        />
 
-      <!-- 头顶柔光 -->
-      <ellipse cx="38" cy="33" rx="13" ry="8" fill="#fff" opacity="0.35" transform="rotate(-18 38 33)" />
+        <!-- 头顶柔光 -->
+        <ellipse cx="38" cy="33" rx="13" ry="8" fill="#fff" opacity="0.35" transform="rotate(-18 38 33)" />
 
-      <!-- 眼睛 -->
-      <g class="eyes">
-        <template v-if="petting">
-          <path d="M30 52 Q36 45 42 52" stroke="#2b2b2b" stroke-width="2.6" fill="none" stroke-linecap="round" />
-          <path d="M58 52 Q64 45 70 52" stroke="#2b2b2b" stroke-width="2.6" fill="none" stroke-linecap="round" />
-        </template>
-        <template v-else>
-          <ellipse cx="36" cy="52" rx="8.5" ry="10" fill="#fff" />
-          <ellipse cx="64" cy="52" rx="8.5" ry="10" fill="#fff" />
-          <circle :cx="36 + pupil.x" :cy="53 + pupil.y" r="5.6" fill="#2b2b2b" />
-          <circle :cx="64 + pupil.x" :cy="53 + pupil.y" r="5.6" fill="#2b2b2b" />
-          <circle :cx="33.6 + pupil.x" :cy="50 + pupil.y" r="2.1" fill="#fff" />
-          <circle :cx="61.6 + pupil.x" :cy="50 + pupil.y" r="2.1" fill="#fff" />
-        </template>
-      </g>
+        <!-- 眼睛 -->
+        <g class="eyes">
+          <template v-if="action === 'sleep'">
+            <path d="M30 53 Q36 58 42 53" stroke="#2b2b2b" stroke-width="2.4" fill="none" stroke-linecap="round" />
+            <path d="M58 53 Q64 58 70 53" stroke="#2b2b2b" stroke-width="2.4" fill="none" stroke-linecap="round" />
+          </template>
+          <template v-else-if="petting">
+            <path d="M30 52 Q36 45 42 52" stroke="#2b2b2b" stroke-width="2.6" fill="none" stroke-linecap="round" />
+            <path d="M58 52 Q64 45 70 52" stroke="#2b2b2b" stroke-width="2.6" fill="none" stroke-linecap="round" />
+          </template>
+          <template v-else>
+            <ellipse cx="36" cy="52" rx="8.5" ry="10" fill="#fff" />
+            <ellipse cx="64" cy="52" rx="8.5" ry="10" fill="#fff" />
+            <circle :cx="36 + pupil.x" :cy="53 + pupil.y" r="5.6" fill="#2b2b2b" />
+            <circle :cx="64 + pupil.x" :cy="53 + pupil.y" r="5.6" fill="#2b2b2b" />
+            <circle :cx="33.6 + pupil.x" :cy="50 + pupil.y" r="2.1" fill="#fff" />
+            <circle :cx="61.6 + pupil.x" :cy="50 + pupil.y" r="2.1" fill="#fff" />
+          </template>
+        </g>
 
-      <!-- 腮红 -->
-      <ellipse cx="24" cy="64" rx="7" ry="4.5" :fill="'url(#' + gid('blush') + ')'" />
-      <ellipse cx="76" cy="64" rx="7" ry="4.5" :fill="'url(#' + gid('blush') + ')'" />
+        <!-- 腮红 -->
+        <ellipse cx="24" cy="64" rx="7" ry="4.5" :fill="'url(#' + gid('blush') + ')'" />
+        <ellipse cx="76" cy="64" rx="7" ry="4.5" :fill="'url(#' + gid('blush') + ')'" />
 
-      <!-- 嘴 -->
-      <path
-        v-if="!petting"
-        d="M45 66 Q50 70 55 66"
-        stroke="#2b2b2b" stroke-width="1.8" fill="none" stroke-linecap="round" opacity="0.75"
-      />
-      <ellipse v-else cx="50" cy="67" rx="4.5" ry="3.2" fill="#2b2b2b" opacity="0.8" />
+        <!-- 嘴 -->
+        <path
+          v-if="!petting"
+          d="M45 66 Q50 70 55 66"
+          stroke="#2b2b2b" stroke-width="1.8" fill="none" stroke-linecap="round" opacity="0.75"
+        />
+        <ellipse v-else cx="50" cy="67" rx="4.5" ry="3.2" fill="#2b2b2b" opacity="0.8" />
 
-      <!-- 亲密度高时头顶闪光 -->
-      <circle
-        v-if="intimacy >= 60"
-        cx="50" cy="24" r="3"
-        fill="#ffe082"
-        :filter="'url(#' + gid('glow') + ')'"
-        class="spark"
-      />
-    </svg>
+        <!-- 亲密度高时头顶闪光 -->
+        <circle
+          v-if="intimacy >= 60"
+          cx="50" cy="24" r="3"
+          fill="#ffe082"
+          :filter="'url(#' + gid('glow') + ')'"
+          class="spark"
+        />
+      </svg>
+
+      <!-- 睡觉时飘出的 Z -->
+      <div v-if="action === 'sleep'" class="zzz">
+        <span style="animation-delay: 0s">z</span>
+        <span style="animation-delay: 0.35s">z</span>
+        <span style="animation-delay: 0.7s">Z</span>
+      </div>
+    </div>
 
     <div class="mbti-badge" :style="{ color: lightColor }">{{ mbti }}</div>
     <div class="intimacy-label">♥ {{ intimacy }}</div>
@@ -102,7 +125,7 @@ const containerEl = ref<HTMLElement | null>(null);
 const uid = Math.random().toString(36).slice(2, 8);
 const gid = (name: string) => "pet-" + uid + "-" + name;
 
-// ---------- 颜色派生 ----------
+// ==================== 颜色派生 ====================
 function hexToRgb(hex: string) {
   const h = hex.replace("#", "");
   const full = h.length === 3 ? h.split("").map(c => c + c).join("") : h;
@@ -119,34 +142,107 @@ function mix(hex: string, target: number, amount: number) {
   return "#" + [f(r), f(g), f(b)].map(v => v.toString(16).padStart(2, "0")).join("");
 }
 
-/** 顶部高光色（往白调） */
 const lightColor = computed(() => mix(props.color, 255, 0.45));
-/** 底部暗部色（往黑调） */
 const darkColor = computed(() => mix(props.color, 0, 0.28));
 
-// ---------- 瞳孔跟随鼠标 ----------
-const pupil = ref({ x: 0, y: 0 });
-const MAX_OFFSET = 2.6;
+// ==================== 自主行为系统 ====================
+// 宠物每隔几秒自己随机做个动作，不用用户操作也有"活着"的感觉
+type Action = "hop" | "wiggle" | "jelly" | "look" | "sleep";
 
+const action = ref<Action | "">("");
+const actionClass = computed(() => (action.value ? "act-" + action.value : ""));
+
+/** 各动作持续时间（毫秒），与 CSS keyframes 时长对应 */
+const DURATION: Record<Action, number> = {
+  hop: 800,
+  wiggle: 950,
+  jelly: 850,
+  look: 1500,
+  sleep: 3200,
+};
+
+// 瞳孔偏移：鼠标注视 + 自发张望，两者叠加后限幅
+const mousePupil = ref({ x: 0, y: 0 });
+const lookPupil = ref({ x: 0, y: 0 });
+const MAX_PUPIL = 3.2;
+
+const pupil = computed(() => {
+  const x = mousePupil.value.x + lookPupil.value.x;
+  const y = mousePupil.value.y + lookPupil.value.y;
+  const m = Math.hypot(x, y);
+  if (m <= MAX_PUPIL) return { x, y };
+  return { x: (x / m) * MAX_PUPIL, y: (y / m) * MAX_PUPIL };
+});
+
+let idleTimer: number | null = null;
+let actionTimer: number | null = null;
+let lookTimer: number | null = null;
+
+const ACTION_POOL: Action[] = ["hop", "wiggle", "jelly", "look", "look", "look", "sleep"];
+
+function runAction(a: Action) {
+  if (props.petting) return;
+  action.value = a;
+
+  if (a === "look") {
+    // 随机看一个方向，然后收回
+    const ang = Math.random() * Math.PI * 2;
+    lookPupil.value = { x: Math.cos(ang) * 2.8, y: Math.sin(ang) * 2.2 };
+    lookTimer = window.setTimeout(() => {
+      lookPupil.value = { x: 0, y: 0 };
+    }, 1150);
+  }
+
+  if (actionTimer !== null) clearTimeout(actionTimer);
+  actionTimer = window.setTimeout(() => {
+    action.value = "";
+  }, DURATION[a]);
+}
+
+/** 排下一次自发动作，间隔 2~5.5 秒随机 */
+function scheduleIdle() {
+  idleTimer = window.setTimeout(() => {
+    const a = ACTION_POOL[Math.floor(Math.random() * ACTION_POOL.length)];
+    runAction(a);
+    scheduleIdle();
+  }, 2000 + Math.random() * 3500);
+}
+
+function clearTimers() {
+  if (idleTimer !== null) clearTimeout(idleTimer);
+  if (actionTimer !== null) clearTimeout(actionTimer);
+  if (lookTimer !== null) clearTimeout(lookTimer);
+}
+
+// ==================== 瞳孔跟随鼠标 ====================
 function onMouseMove(e: MouseEvent) {
   const el = containerEl.value;
   if (!el) return;
   const rect = el.getBoundingClientRect();
-  const cx = rect.left + rect.width / 2;
-  const cy = rect.top + rect.height / 2;
-  const dx = e.clientX - cx;
-  const dy = e.clientY - cy;
+  const dx = e.clientX - (rect.left + rect.width / 2);
+  const dy = e.clientY - (rect.top + rect.height / 2);
   const dist = Math.hypot(dx, dy);
   if (dist < 1) {
-    pupil.value = { x: 0, y: 0 };
+    mousePupil.value = { x: 0, y: 0 };
     return;
   }
-  const scale = (Math.min(1, dist / 110) * MAX_OFFSET) / dist;
-  pupil.value = { x: dx * scale, y: dy * scale };
+  const scale = (Math.min(1, dist / 110) * 2.3) / dist;
+  mousePupil.value = { x: dx * scale, y: dy * scale };
 }
 
-onMounted(() => window.addEventListener("mousemove", onMouseMove));
-onUnmounted(() => window.removeEventListener("mousemove", onMouseMove));
+onMounted(() => {
+  window.addEventListener("mousemove", onMouseMove);
+  // 首次动作早点来，让用户马上看到它动了
+  idleTimer = window.setTimeout(() => {
+    runAction("hop");
+    scheduleIdle();
+  }, 900);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("mousemove", onMouseMove);
+  clearTimers();
+});
 </script>
 
 <style scoped>
@@ -161,48 +257,134 @@ onUnmounted(() => window.removeEventListener("mousemove", onMouseMove));
 }
 .pet-container:active { cursor: grabbing; }
 
+/* 外层：持续浮动，始终在跑 */
+.pet-float {
+  position: relative;
+  animation: bob 2.8s ease-in-out infinite;
+  transform-origin: 50% 85%;
+}
+
 .pet-svg {
   width: 76px;
   height: 76px;
+  display: block;
   overflow: visible;
-  animation: bob 3.2s ease-in-out infinite;
   transform-origin: 50% 85%;
   cursor: grab;
 }
-.pet-svg.petting {
-  animation: petHop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
 
+/* ---------- 常驻浮动 ---------- */
 @keyframes bob {
   0%, 100% { transform: translateY(0) scale(1); }
-  50%      { transform: translateY(-2.5px) scale(1.035); }
+  50%      { transform: translateY(-4px) scale(1.04); }
 }
+
+/* ---------- 自发动作（一次性的） ---------- */
+.pet-svg.act-hop    { animation: actHop 0.8s cubic-bezier(0.28, 1.4, 0.5, 1); }
+.pet-svg.act-wiggle { animation: actWiggle 0.95s ease-in-out; }
+.pet-svg.act-jelly  { animation: actJelly 0.85s ease-in-out; }
+.pet-svg.act-sleep  { animation: actSleep 3.2s ease-in-out; }
+
+@keyframes actHop {
+  0%   { transform: translateY(0) scale(1, 1); }
+  15%  { transform: translateY(0) scale(1.12, 0.88); }
+  40%  { transform: translateY(-18px) scale(0.94, 1.1); }
+  62%  { transform: translateY(0) scale(1.14, 0.86); }
+  78%  { transform: translateY(-4px) scale(0.99, 1.02); }
+  100% { transform: translateY(0) scale(1, 1); }
+}
+
+@keyframes actWiggle {
+  0%, 100% { transform: rotate(0deg); }
+  14%      { transform: rotate(-8deg); }
+  30%      { transform: rotate(8deg); }
+  46%      { transform: rotate(-6deg); }
+  62%      { transform: rotate(5deg); }
+  78%      { transform: rotate(-2deg); }
+}
+
+/* 果冻：压扁再弹回来 */
+@keyframes actJelly {
+  0%, 100% { transform: scale(1, 1); }
+  22%      { transform: scale(1.18, 0.82); }
+  45%      { transform: scale(0.88, 1.14); }
+  68%      { transform: scale(1.08, 0.94); }
+  85%      { transform: scale(0.97, 1.03); }
+}
+
+/* 打瞌睡：慢慢趴下 */
+@keyframes actSleep {
+  0%       { transform: translateY(0) scale(1, 1); }
+  15%, 80% { transform: translateY(3px) scale(1.08, 0.93); }
+  100%     { transform: translateY(0) scale(1, 1); }
+}
+
+/* ---------- 被抚摸：优先级最高（放最后覆盖同优先级动作） ---------- */
+.pet-svg.petting { animation: petHop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
 @keyframes petHop {
   0%   { transform: translateY(0) scale(1) rotate(0deg); }
-  25%  { transform: translateY(-9px) scale(1.09) rotate(-4deg); }
-  55%  { transform: translateY(1px) scale(0.96) rotate(3deg); }
+  25%  { transform: translateY(-11px) scale(1.1) rotate(-4deg); }
+  55%  { transform: translateY(1px) scale(0.95) rotate(3deg); }
   78%  { transform: translateY(-3px) scale(1.03) rotate(-1deg); }
   100% { transform: translateY(0) scale(1) rotate(0deg); }
 }
 
+/* ---------- 影子：跳起来时缩小变淡 ---------- */
+.shadow {
+  transition: transform 0.25s ease, opacity 0.25s ease;
+  transform-origin: 50% 90%;
+}
+.shadow.airborne {
+  transform: scale(0.72);
+  opacity: 0.07;
+}
+
+/* ---------- 眨眼 ---------- */
 .eyes {
   transform-box: fill-box;
   transform-origin: center;
-  animation: blink 4.6s infinite;
+  animation: blink 3.6s infinite;
 }
 @keyframes blink {
-  0%, 92%, 100% { transform: scaleY(1); }
-  95%           { transform: scaleY(0.08); }
+  0%, 88%, 100% { transform: scaleY(1); }
+  92%           { transform: scaleY(0.06); }
+  96%           { transform: scaleY(1); }
 }
 
-.spark {
-  animation: sparkle 2.2s ease-in-out infinite;
-}
+/* ---------- 头顶闪光 ---------- */
+.spark { animation: sparkle 2.2s ease-in-out infinite; }
 @keyframes sparkle {
   0%, 100% { opacity: 0.35; transform: scale(0.85); }
   50%      { opacity: 1;    transform: scale(1.15); }
 }
 
+/* ---------- 睡觉的 Z ---------- */
+.zzz {
+  position: absolute;
+  right: 0;
+  top: 0;
+  pointer-events: none;
+}
+.zzz span {
+  position: absolute;
+  right: 0;
+  color: #cfd8dc;
+  font-weight: 700;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  animation: floatZ 2.4s ease-out infinite;
+  opacity: 0;
+}
+.zzz span:nth-child(1) { font-size: 9px; }
+.zzz span:nth-child(2) { font-size: 12px; }
+.zzz span:nth-child(3) { font-size: 15px; }
+@keyframes floatZ {
+  0%   { opacity: 0; transform: translate(0, 0) scale(0.7); }
+  25%  { opacity: 0.9; }
+  100% { opacity: 0; transform: translate(14px, -30px) scale(1.15); }
+}
+
+/* ---------- 爱心 ---------- */
 .hearts {
   position: absolute;
   left: 0;
