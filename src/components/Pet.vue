@@ -123,6 +123,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from "vue";
+import { listen } from "@tauri-apps/api/event";
 
 const props = defineProps<{
   color: string;
@@ -232,23 +233,62 @@ function clearTimers() {
 }
 
 // ==================== 瞳孔跟随鼠标 ====================
-function onMouseMove(e: MouseEvent) {
+//
+// 两个来源：
+//   1) 窗口内的 mousemove（高频，光标在窗口里时最跟手）
+//   2) Rust 推来的全局光标（pet://cursor）—— 关键的那一条
+//
+// 为什么必须有 2：mousemove 只在光标位于窗口内时才触发，
+// 光标一旦移出窗口就彻底收不到事件，眼睛等于瞎了。
+// 而桌宠的眼睛应该能跟着屏幕任何角落的光标转。
+// 全局光标位置只有 Rust 侧拿得到（和点击穿透的命中测试共用同一份轮询）。
+
+/** 瞳孔最大偏移。比原来的 2.3 略大，因为现在光标可能在很远处 */
+const MAX_LOOK = 2.8;
+
+/** 把客户区坐标（CSS 像素）换算成瞳孔偏移 */
+function applyCursor(cx: number, cy: number) {
   const el = containerEl.value;
   if (!el) return;
   const rect = el.getBoundingClientRect();
-  const dx = e.clientX - (rect.left + rect.width / 2);
-  const dy = e.clientY - (rect.top + rect.height / 2);
+  const dx = cx - (rect.left + rect.width / 2);
+  const dy = cy - (rect.top + rect.height / 2);
   const dist = Math.hypot(dx, dy);
   if (dist < 1) {
     mousePupil.value = { x: 0, y: 0 };
     return;
   }
-  const scale = (Math.min(1, dist / 110) * 2.3) / dist;
-  mousePupil.value = { x: dx * scale, y: dy * scale };
+  // 方向取单位向量，幅度随距离增大但封顶 ——
+  // 这样光标跑到屏幕另一头时，它依然是在「看向」那边，而不是回到正中
+  const mag = Math.min(1, dist / 110) * MAX_LOOK;
+  mousePupil.value = { x: (dx / dist) * mag, y: (dy / dist) * mag };
 }
+
+function onMouseMove(e: MouseEvent) {
+  applyCursor(e.clientX, e.clientY);
+}
+
+let unlistenCursor: (() => void) | null = null;
+
+const isTauri = () =>
+  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 onMounted(() => {
   window.addEventListener("mousemove", onMouseMove);
+
+  // Rust 推来的全局光标，让眼睛能跟到窗口外的任何位置
+  if (isTauri()) {
+    listen<{ x: number; y: number }>("pet://cursor", (e) => {
+      applyCursor(e.payload.x, e.payload.y);
+    })
+      .then((un) => {
+        unlistenCursor = un;
+      })
+      .catch(() => {
+        /* 订阅失败就退回只用 mousemove，不至于整个组件崩掉 */
+      });
+  }
+
   // 首次动作早点来，让用户马上看到它动了
   idleTimer = window.setTimeout(() => {
     runAction("hop");
@@ -258,6 +298,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener("mousemove", onMouseMove);
+  if (unlistenCursor) unlistenCursor();
   clearTimers();
 });
 </script>
