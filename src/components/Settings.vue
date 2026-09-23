@@ -40,6 +40,8 @@ const emit = defineEmits<{ close: []; saved: [] }>();
 const key = ref(pet.apiKey);
 const model = ref(pet.model);
 const baseUrl = ref(pet.baseUrl);
+const jevKey = ref(pet.jevKey);
+const jevBaseUrl = ref(pet.jevBaseUrl);
 const testing = ref(false);
 const error = ref("");
 const success = ref(false);
@@ -97,7 +99,7 @@ async function testConnection() {
 }
 
 function save() {
-  saveConfig(key.value, model.value, baseUrl.value);
+  saveConfig(key.value, model.value, baseUrl.value, jevKey.value, jevBaseUrl.value);
   emit("saved");
 }
 </script>
@@ -138,6 +140,9 @@ h2 { font-size: 18px; margin-bottom: 4px; }
 }
 .field input:focus, .field select:focus { border-color: #1976d2; }
 .hint { color: #666; font-size: 11px; margin-top: 4px; }
+.jev-hint { font-size: 11px; color: #666; margin-top: 4px; }
+.divider { border-top: 1px solid #333; margin: 16px 0; }
+.section-title { font-size: 11px; color: #888; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
 .error { color: #ef5350; font-size: 12px; margin-bottom: 10px; }
 .success { color: #66bb6a; font-size: 12px; margin-bottom: 10px; }
 .actions { display: flex; gap: 8px; margin-top: 16px; }

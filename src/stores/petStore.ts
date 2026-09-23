@@ -56,6 +56,8 @@ export const pet = reactive<PetState>({
   mbti: saved.mbti || null,
   messages: [],
   apiKey: saved.apiKey || "",
+  jevKey: saved.jevKey || "",
+  jevBaseUrl: saved.jevBaseUrl || "https://api.typesafe.ai",
   model: saved.model || "gpt-4o-mini",
   baseUrl: saved.baseUrl || "https://api.openai.com",
   chatOpen: false,
@@ -80,10 +82,12 @@ export function tryHatch(): boolean {
   return false;
 }
 
-export function saveConfig(key: string, model: string, baseUrl: string) {
+export function saveConfig(key: string, model: string, baseUrl: string, jevKey?: string, jevBaseUrl?: string) {
   pet.apiKey = key;
   pet.model = model;
   pet.baseUrl = baseUrl.replace(/\/$/, "");
+  if (jevKey !== undefined) pet.jevKey = jevKey;
+  if (jevBaseUrl !== undefined) pet.jevBaseUrl = jevBaseUrl;
   saveState(pet);
 }
 
@@ -92,25 +96,124 @@ export function addMessage(role: "user" | "assistant", content: string) {
   if (pet.messages.length > 50) pet.messages.shift();
 }
 
+export async function callJevRouter(userInput: string): Promise<string | null> {
+  if (!hasJevKey()) return null;
+  try {
+    const base = pet.jevBaseUrl.replace(/\/$/, "");
+    const path = /\/v1$/.test(base) ? "/chat/completions" : "/v1/chat/completions";
+    const res = await fetch(base + path, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + pet.jevKey,
+      },
+      body: JSON.stringify({
+        model: "jev-1.13",
+        messages: [
+          {
+            role: "system",
+            content: "Classify the user message into: greeting, casual, emotional, query, or command. Reply with ONE word only.",
+          },
+          { role: "user", content: userInput },
+        ],
+        max_tokens: 10,
+        temperature: 0.1,
+      }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return (data.choices?.[0]?.message?.content || "").trim().toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
 export async function chat(userInput: string): Promise<string> {
   addMessage("user", userInput);
 
+  export async function chat(userInput: string): Promise<string> {
+  addMessage("user", userInput);
+
+  // Jev 路由：分类消息类型，决定上下文长度
+  let contextMsgCount = 20; // 默认完整上下文
+  let category = "";
+  const jevResult = await callJevRouter(userInput);
+  if (jevResult) {
+    category = jevResult;
+    if (category === "greeting" || category === "casual") {
+      contextMsgCount = 2; // 简短聊天只用最近 2 条
+    }
+  }
+
   const systemPrompt = pet.stage === "egg"
     ? "你是一枚神秘的宠物蛋。你还没有破壳，但已经能感受到主人的温暖。说话要简短、模糊、带点神秘感。每次只说1-2句话。"
-    : `你是一只叫 SpiritPet 的桌面宠物。你的性格类型是 ${pet.mbti}。${getMBTIPrompt(pet.mbti || "INFP")}
-你现在的亲密度是 ${pet.intimacy}（满值30时你破壳了）。说话要简短自然，每次1-3句话。`;
+    : "你是一只叫 SpiritPet 的桌面宠物。你的性格类型是 ${pet.mbti}。${getMBTIPrompt(pet.mbti || "INFP")}\n你现在的亲密度是 ${pet.intimacy}（满值30时你破壳了）。说话要简短自然，每次1-3句话。"
+
+  const msgs = pet.messages.slice(-contextMsgCount).map(m => ({ role: m.role, content: m.content }));
+  // 如果用了短上下文，把分类信息告诉模型
+  if (contextMsgCount < 20) {
+    msgs.unshift({ role: "system", content: "【简短模式】用户只是简单互动，简短回应即可，1-2句话。" });
+  }
 
   const body = JSON.stringify({
     model: pet.model,
-    messages: [
-      { role: "system", content: systemPrompt },
-      ...pet.messages.slice(-20).map(m => ({ role: m.role, content: m.content })),
-    ],
+    messages: [{ role: "system", content: systemPrompt }, ...msgs],
     max_tokens: 300,
     temperature: 0.8,
   });
 
+  // 发送请求
   try {
+    let base = pet.baseUrl.replace(/\/$/, "");
+    let paths: string[];
+    if (/\/v1$/.test(base)) {
+      paths = ["/chat/completions"];
+    } else {
+      paths = ["/chat/completions", "/v1/chat/completions"];
+    }
+    let errs: string[] = [];
+    let data: any = null;
+
+    for (const p of paths) {
+      const url = base + p;
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + pet.apiKey,
+          },
+          body,
+        });
+        if (res.ok) {
+          data = await res.json();
+          break;
+        }
+        const errBody = await res.text().catch(() => "");
+        errs.push(url + " HTTP " + res.status + ": " + errBody.substring(0, 80));
+      } catch (e: any) {
+        errs.push(url + " " + e.message);
+      }
+    }
+
+    if (!data) throw new Error(errs.join(" | "));
+
+    const reply = data.choices?.[0]?.message?.content || "(no response)";
+
+    addMessage("assistant", reply);
+
+    if (pet.stage === "egg") {
+      addIntimacy(1);
+    }
+
+    return reply;
+  } catch (e: any) {
+    const errMsg = "[错误] " + e.message;
+    addMessage("assistant", errMsg);
+    return errMsg;
+  }
+}
+
     let base = pet.baseUrl.replace(/\/$/, "");
     let paths: string[];
     // 如果 base URL 已有 /v1 路径，不加重复的 v1
