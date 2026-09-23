@@ -35,9 +35,9 @@
             stroke="#7a6a4a" stroke-width="2.2" fill="none"
             stroke-linecap="round" stroke-linejoin="round"
           >
-            <path v-if="crackCount >= 1" d="M24 60 L36 66 L32 76 L44 82" />
-            <path v-if="crackCount >= 2" d="M76 56 L64 64 L70 74 L58 82" />
-            <path v-if="crackCount >= 3" d="M50 10 L45 32 L56 44 L47 60 L58 74" />
+            <path v-if="crackCount >= 1" :d="cracks[0]" />
+            <path v-if="crackCount >= 2" :d="cracks[1]" />
+            <path v-if="crackCount >= 3" :d="cracks[2]" />
           </g>
         </svg>
 
@@ -77,7 +77,9 @@
       <div class="cap-title" :style="{ color: color }">
         「{{ persona.title }}」<span class="cap-mbti">{{ mbti }}</span>
       </div>
-      <div class="cap-line">{{ persona.sample }}</div>
+      <div class="cap-reasons">
+        <div v-for="(r, i) in displayReasons" :key="i" class="cap-reason">{{ r }}</div>
+      </div>
     </div>
   </div>
 </template>
@@ -90,15 +92,29 @@ import { getPersonality } from "../data/personalities";
 const props = defineProps<{
   mbti: string | null;
   color: string;
+  /** 性格判定理由，展示「它为什么长成这样」 */
+  reasons?: string[];
 }>();
 
 const emit = defineEmits<{ burst: []; done: [] }>();
 
 const persona = computed(() => getPersonality(props.mbti));
 
+/** 最多显示 2 条理由，窗口只有 280x320，多了放不下 */
+const displayReasons = computed(() => (props.reasons || []).slice(0, 2));
+
 type Phase = "crack" | "burst" | "reveal";
 const phase = ref<Phase>("crack");
 const crackCount = ref(0);
+
+// 破壳方式随机（设计文档 §3.3：啄开 / 撑裂 / 融化）。
+// 用三套不同的裂纹走向区分，避免每次破壳看起来都一样。
+const CRACK_SETS = [
+  ["M24 60 L36 66 L32 76 L44 82", "M76 56 L64 64 L70 74 L58 82", "M50 10 L45 32 L56 44 L47 60 L58 74"],
+  ["M50 12 L44 30 L54 42 L46 58 L56 72 L48 88", "M22 50 L34 60 L28 72", "M78 48 L66 58 L72 70"],
+  ["M30 30 L44 44 L36 58 L50 70 L42 84", "M70 34 L58 46 L66 60 L54 72", "M20 68 L34 74 L26 86"],
+];
+const cracks = CRACK_SETS[Math.floor(Math.random() * CRACK_SETS.length)];
 
 /** 蛋壳碎片：随机方向、距离、旋转，做出炸开的效果 */
 const pieces = Array.from({ length: 14 }, (_, i) => {
@@ -313,17 +329,25 @@ onUnmounted(() => timers.forEach(clearTimeout));
   margin-left: 2px;
 }
 
-.cap-line {
+.cap-reasons {
   margin-top: 8px;
-  font-size: 11.5px;
-  line-height: 1.6;
-  color: #ded9ee;
   background: rgba(255, 255, 255, 0.07);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 10px;
-  padding: 8px 10px;
-  max-width: 216px;
+  padding: 8px 11px;
+  max-width: 224px;
   margin-left: auto;
   margin-right: auto;
+  text-align: left;
+}
+.cap-reason {
+  font-size: 11px;
+  line-height: 1.6;
+  color: #ded9ee;
+}
+.cap-reason + .cap-reason {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
 }
 </style>

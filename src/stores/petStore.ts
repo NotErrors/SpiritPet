@@ -1,6 +1,7 @@
-import { reactive, computed } from "vue";
+import { reactive, computed, ref } from "vue";
 import { httpFetch } from "../lib/http";
 import { MBTI_LIST, getPersonality, getColor, getPersonalityPrompt } from "../data/personalities";
+import { analyzeConversation, type MbtiAnalysis } from "../lib/mbti-analysis";
 
 export interface Message {
   role: "user" | "assistant";
@@ -20,6 +21,14 @@ interface PetState {
   jevBaseUrl: string;
   chatOpen: boolean;
   lastPetTime: number;
+  /** 上次活跃日期 YYYY-MM-DD，用于跨天结算衰减 */
+  lastActiveDate: string;
+  /** 今日已加分的对话轮数（每日上限 20） */
+  dailyChatCount: number;
+  /** 今日早安是否已加分 */
+  greetDone: boolean;
+  /** 今日晚安是否已加分 */
+  nightDone: boolean;
 }
 
 // 16 种类型与配色统一由 data/personalities.ts 提供
@@ -45,6 +54,10 @@ function saveState(state: PetState) {
     jevKey: state.jevKey,
     jevBaseUrl: state.jevBaseUrl,
     lastPetTime: state.lastPetTime,
+    lastActiveDate: state.lastActiveDate,
+    dailyChatCount: state.dailyChatCount,
+    greetDone: state.greetDone,
+    nightDone: state.nightDone,
   }));
 }
 
@@ -62,6 +75,10 @@ export const pet = reactive<PetState>({
   baseUrl: saved.baseUrl || "https://api.openai.com",
   chatOpen: false,
   lastPetTime: saved.lastPetTime || 0,
+  lastActiveDate: saved.lastActiveDate || "",
+  dailyChatCount: saved.dailyChatCount || 0,
+  greetDone: saved.greetDone || false,
+  nightDone: saved.nightDone || false,
 });
 
 export const hasApiKey = computed(() => pet.apiKey.length > 0);
@@ -78,6 +95,11 @@ export function resetPet() {
   pet.mbti = null;
   pet.messages = [];
   pet.lastPetTime = 0;
+  pet.lastActiveDate = "";
+  pet.dailyChatCount = 0;
+  pet.greetDone = false;
+  pet.nightDone = false;
+  hatchAnalysis.value = null;
   saveState(pet);
 }
 
@@ -97,18 +119,97 @@ export function petTouch(): boolean {
   const now = Date.now();
   if (now - pet.lastPetTime < PET_COOLDOWN) return false;
   pet.lastPetTime = now;
-  if (pet.stage === "egg") {
-    addIntimacy(1);
-  } else {
-    saveState(pet);
-  }
+  addIntimacy(1);
   return true;
 }
 
+// ==================== 亲密度规则（设计文档 §4） ====================
+
+/** 每日对话加分上限（§4.2） */
+const DAILY_CHAT_CAP = 20;
+/** 蛋期每轮对话加分（§3.2 规定 +1~3，取中间值让闭环 15 轮左右可达） */
+const EGG_CHAT_GAIN = 2;
+/** 每日衰减率（§4.4：每天凌晨 总亲密度 × 0.5%） */
+const DAILY_DECAY = 0.995;
+
+function todayStr(): string {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return d.getFullYear() + "-" + m + "-" + day;
+}
+
+/**
+ * 跨天结算。
+ * 按实际间隔天数补齐衰减（隔了 3 天就衰减 3 次），
+ * 否则放着不管一个月，回来只掉 0.5% 就失去意义了。
+ */
+function rolloverDay() {
+  const today = todayStr();
+  if (pet.lastActiveDate === today) return;
+
+  if (pet.lastActiveDate && pet.intimacy > 0) {
+    const prev = new Date(pet.lastActiveDate + "T00:00:00").getTime();
+    const now = new Date(today + "T00:00:00").getTime();
+    const days = Math.max(1, Math.round((now - prev) / 86400000));
+    pet.intimacy = Math.floor(pet.intimacy * Math.pow(DAILY_DECAY, days));
+  }
+
+  pet.lastActiveDate = today;
+  pet.dailyChatCount = 0;
+  pet.greetDone = false;
+  pet.nightDone = false;
+}
+
+const MORNING_WORDS = ["早安", "早上好", "早啊", "早呀", "morning"];
+const NIGHT_WORDS = ["晚安", "去睡了", "睡了", "night"];
+
+/**
+ * 对话奖励（§4.2）。
+ * 超过每日上限后仍可正常聊天，只是不再加分——
+ * 这是刻意的：防止用户挂机刷亲密度，让关系增长有节奏。
+ */
+export function chatReward(): boolean {
+  rolloverDay();
+  if (pet.dailyChatCount >= DAILY_CHAT_CAP) {
+    saveState(pet);
+    return false;
+  }
+  pet.dailyChatCount++;
+  addIntimacy(pet.stage === "egg" ? EGG_CHAT_GAIN : 1);
+  return true;
+}
+
+/**
+ * 早安/晚安奖励（§4.2，每日各限 1 次 +3）。
+ * @returns "morning" | "night" | null
+ */
+export function greetReward(text: string): string | null {
+  rolloverDay();
+  const t = text.toLowerCase();
+  if (!pet.greetDone && MORNING_WORDS.some(w => t.includes(w))) {
+    pet.greetDone = true;
+    addIntimacy(3);
+    return "morning";
+  }
+  if (!pet.nightDone && NIGHT_WORDS.some(w => t.includes(w))) {
+    pet.nightDone = true;
+    addIntimacy(3);
+    return "night";
+  }
+  return null;
+}
+
+/** 破壳时的性格分析结果，供破壳仪式展示「它为什么长成这样」 */
+export const hatchAnalysis = ref<MbtiAnalysis | null>(null);
+
 export function tryHatch(): boolean {
   if (pet.intimacy >= 30 && pet.stage === "egg") {
+    // 首次 MBTI 分配：分析破壳前的对话风格，而不是掷骰子（§3.3）
+    const analysis = analyzeConversation(pet.messages);
+    hatchAnalysis.value = analysis;
     pet.stage = "pet";
-    pet.mbti = MBTI_TYPES[Math.floor(Math.random() * MBTI_TYPES.length)];
+    pet.mbti = analysis.mbti;
     saveState(pet);
     return true;
   }
@@ -243,9 +344,9 @@ export async function chat(userInput: string): Promise<string> {
 
     addMessage("assistant", reply);
 
-    if (pet.stage === "egg") {
-      addIntimacy(1);
-    }
+    // 亲密度奖励：早安/晚安 +3（每日各 1 次）、对话加分（蛋期 +2 / 宠物 +1，每日上限 20 轮）
+    greetReward(userInput);
+    chatReward();
 
     return reply;
   } catch (e: any) {

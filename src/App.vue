@@ -67,6 +67,7 @@
         v-if="showCeremony"
         :mbti="mbti"
         :color="mbtiColor"
+        :reasons="hatchReasons"
         @burst="commitHatch"
         @done="onCeremonyDone"
       />
@@ -76,7 +77,8 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from "vue";
-import { pet, hasApiKey, mbtiColor, tryHatch, petTouch, resetPet, type Message } from "./stores/petStore";
+import { pet, hasApiKey, mbtiColor, tryHatch, petTouch, resetPet, hatchAnalysis, addMessage, type Message } from "./stores/petStore";
+import { getPersonality } from "./data/personalities";
 import Egg from "./components/Egg.vue";
 import Pet from "./components/Pet.vue";
 import ChatPanel from "./components/ChatPanel.vue";
@@ -88,6 +90,8 @@ const intimacy = ref(pet.intimacy);
 const mbti = ref(pet.mbti);
 const chatOpen = ref(false);
 const showCeremony = ref(false);
+/** 破壳时展示的性格判定理由 */
+const hatchReasons = ref<string[]>([]);
 const showMenu = ref(false);
 const menuX = ref(0);
 const menuY = ref(0);
@@ -148,6 +152,11 @@ function commitHatch() {
     stage.value = "pet";
     mbti.value = pet.mbti;
     chatOpen.value = false;
+    // 让它说第一句话。用性格自带的示例台词，
+    // 不调接口所以必定成功——破壳这么重要的时刻不能因为网络失败而冷场。
+    hatchReasons.value = hatchAnalysis.value?.reasons || [];
+    const p = getPersonality(pet.mbti);
+    addMessage("assistant", p.sample);
   }
 }
 
@@ -160,6 +169,7 @@ function restart() {
   intimacy.value = 0;
   chatOpen.value = false;
   showCeremony.value = false;
+  hatchReasons.value = [];
 }
 
 function onCeremonyDone() {
