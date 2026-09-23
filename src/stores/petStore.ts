@@ -14,6 +14,8 @@ interface PetState {
   apiKey: string;
   model: string;
   baseUrl: string;
+  jevKey: string;
+  jevBaseUrl: string;
   chatOpen: boolean;
 }
 
@@ -64,8 +66,11 @@ export const pet = reactive<PetState>({
 });
 
 export const hasApiKey = computed(() => pet.apiKey.length > 0);
+export const hasJevKey = computed(() => pet.jevKey.length > 0);
 export const intimacyPercent = computed(() => Math.min(100, (pet.intimacy / 30) * 100));
 export const mbtiColor = computed(() => (pet.mbti ? MBTI_COLORS[pet.mbti] || "#90a4ae" : "#90a4ae"));
+
+
 
 export function addIntimacy(amount: number) {
   pet.intimacy = Math.min(999, pet.intimacy + amount);
@@ -97,7 +102,7 @@ export function addMessage(role: "user" | "assistant", content: string) {
 }
 
 export async function callJevRouter(userInput: string): Promise<string | null> {
-  if (!hasJevKey()) return null;
+  if (!hasJevKey.value) return null;
   try {
     const base = pet.jevBaseUrl.replace(/\/$/, "");
     const path = /\/v1$/.test(base) ? "/chat/completions" : "/v1/chat/completions";
@@ -131,29 +136,25 @@ export async function callJevRouter(userInput: string): Promise<string | null> {
 export async function chat(userInput: string): Promise<string> {
   addMessage("user", userInput);
 
-  export async function chat(userInput: string): Promise<string> {
-  addMessage("user", userInput);
-
   // Jev 路由：分类消息类型，决定上下文长度
-  let contextMsgCount = 20; // 默认完整上下文
-  let category = "";
+  let contextMsgCount = 20;
   const jevResult = await callJevRouter(userInput);
   if (jevResult) {
-    category = jevResult;
-    if (category === "greeting" || category === "casual") {
-      contextMsgCount = 2; // 简短聊天只用最近 2 条
+    if (jevResult === "greeting" || jevResult === "casual") {
+      contextMsgCount = 2;
     }
   }
 
+  let extraHint = "";
+  if (contextMsgCount < 20) {
+    extraHint = "【注意：用户只是简单互动，请简短回应，1-2句话即可。】";
+  }
+
   const systemPrompt = pet.stage === "egg"
-    ? "你是一枚神秘的宠物蛋。你还没有破壳，但已经能感受到主人的温暖。说话要简短、模糊、带点神秘感。每次只说1-2句话。"
-    : "你是一只叫 SpiritPet 的桌面宠物。你的性格类型是 ${pet.mbti}。${getMBTIPrompt(pet.mbti || "INFP")}\n你现在的亲密度是 ${pet.intimacy}（满值30时你破壳了）。说话要简短自然，每次1-3句话。"
+    ? "你是一枚神秘的宠物蛋。你还没有破壳，但已经能感受到主人的温暖。说话要简短、模糊、带点神秘感。每次只说1-2句话。" + extraHint
+    : `你是一只叫 SpiritPet 的桌面宠物。你的性格类型是 ${pet.mbti}。${getMBTIPrompt(pet.mbti || "INFP")}\n你现在的亲密度是 ${pet.intimacy}（满值30时你破壳了）。说话要简短自然，每次1-3句话。` + extraHint;
 
   const msgs = pet.messages.slice(-contextMsgCount).map(m => ({ role: m.role, content: m.content }));
-  // 如果用了短上下文，把分类信息告诉模型
-  if (contextMsgCount < 20) {
-    msgs.unshift({ role: "system", content: "【简短模式】用户只是简单互动，简短回应即可，1-2句话。" });
-  }
 
   const body = JSON.stringify({
     model: pet.model,
@@ -162,7 +163,6 @@ export async function chat(userInput: string): Promise<string> {
     temperature: 0.8,
   });
 
-  // 发送请求
   try {
     let base = pet.baseUrl.replace(/\/$/, "");
     let paths: string[];
@@ -193,57 +193,6 @@ export async function chat(userInput: string): Promise<string> {
         errs.push(url + " HTTP " + res.status + ": " + errBody.substring(0, 80));
       } catch (e: any) {
         errs.push(url + " " + e.message);
-      }
-    }
-
-    if (!data) throw new Error(errs.join(" | "));
-
-    const reply = data.choices?.[0]?.message?.content || "(no response)";
-
-    addMessage("assistant", reply);
-
-    if (pet.stage === "egg") {
-      addIntimacy(1);
-    }
-
-    return reply;
-  } catch (e: any) {
-    const errMsg = "[错误] " + e.message;
-    addMessage("assistant", errMsg);
-    return errMsg;
-  }
-}
-
-    let base = pet.baseUrl.replace(/\/$/, "");
-    let paths: string[];
-    // 如果 base URL 已有 /v1 路径，不加重复的 v1
-    if (/\/v1$/.test(base)) {
-      paths = ["/chat/completions"];
-    } else {
-      paths = ["/chat/completions", "/v1/chat/completions"];
-    }
-    let errs: string[] = [];
-    let data: any = null;
-
-    for (const p of paths) {
-      const url = base + p;
-      try {
-        const res = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: "Bearer " + pet.apiKey,
-          },
-          body,
-        });
-        if (res.ok) {
-          data = await res.json();
-          break;
-        }
-        const errBody = await res.text().catch(() => "");
-        errs.push(url + " → HTTP " + res.status + ": " + errBody.substring(0, 80));
-      } catch (e: any) {
-        errs.push(url + " → " + e.message);
       }
     }
 
