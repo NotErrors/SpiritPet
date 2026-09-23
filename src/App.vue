@@ -148,7 +148,7 @@ function toggleChat() {
 }
 
 function onSaved() {
-  // Settings saved, start showing egg
+  showSettings.value = false;
 }
 </script>
 

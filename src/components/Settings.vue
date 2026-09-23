@@ -32,12 +32,13 @@
 
       <div v-if="error" class="error">{{ error }}</div>
       <div v-if="success" class="success">✅ 连接成功！开始和你的蛋聊天吧</div>
+      <div v-if="saved" class="success">💾 已保存，窗口即将关闭…</div>
 
       <div class="actions">
         <button class="btn-test" @click="testConnection" :disabled="testing">
           {{ testing ? "测试中..." : "测试连接" }}
         </button>
-        <button class="btn-save" @click="save" :disabled="!key.trim()">保存</button>
+        <button class="btn-save" @click="save" :disabled="!key.trim() || saved">保存</button>
       </div>
     </div>
   </div>
@@ -56,6 +57,7 @@ const baseUrl = ref(pet.baseUrl);
 const jevKey = ref(pet.jevKey);
 const jevBaseUrl = ref(pet.jevBaseUrl);
 const testing = ref(false);
+const saved = ref(false);
 const error = ref("");
 const success = ref(false);
 
@@ -113,7 +115,11 @@ async function testConnection() {
 
 function save() {
   saveConfig(key.value, model.value, baseUrl.value, jevKey.value, jevBaseUrl.value);
-  emit("saved");
+  saved.value = true;
+  setTimeout(() => {
+    saved.value = false;
+    emit("saved");
+  }, 600);
 }
 </script>
 
