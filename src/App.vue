@@ -9,13 +9,14 @@
     <!-- 右键菜单 -->
     <div v-if="showMenu" class="context-menu" @click.stop
       :style="{ left: menuX + 'px', top: menuY + 'px' }">
+      <div class="menu-item" @click="openSettings">⚙ 设置</div>
       <div class="menu-item" @click="closeApp">✕ 退出 SpiritPet</div>
     </div>
     <!-- 没有 API Key 时显示设置 -->
     <Settings
-      v-if="!hasApiKey"
+      v-if="!hasApiKey || showSettings"
       @saved="onSaved"
-      @close="() => {}"
+      @close="showSettings = false"
     />
 
     <!-- 有 API Key 时显示蛋/宠物 -->
@@ -88,12 +89,18 @@ const showMenu = ref(false);
 const menuX = ref(0);
 const menuY = ref(0);
 const showConfirmExit = ref(false);
+const showSettings = ref(false);
 
 // 右键菜单位置
 function onContextMenu(e: MouseEvent) {
   menuX.value = e.clientX;
   menuY.value = e.clientY;
   showMenu.value = true;
+}
+
+function openSettings() {
+  showMenu.value = false;
+  showSettings.value = true;
 }
 
 function closeApp() {

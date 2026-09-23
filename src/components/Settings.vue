@@ -18,6 +18,18 @@
         <input v-model="baseUrl" placeholder="https://api.openai.com" />
       </div>
 
+      <div class="divider"></div>
+      <div class="section-title">Jev 决策路由（可选）</div>
+      <div class="field">
+        <label>Jev API Key</label>
+        <input v-model="jevKey" type="password" placeholder="留空则不启用路由" />
+      </div>
+      <div class="field">
+        <label>Jev Base URL</label>
+        <input v-model="jevBaseUrl" placeholder="https://api.typesafe.ai" />
+        <div class="jev-hint">简单聊天走短上下文，复杂对话走完整记忆，节省 token</div>
+      </div>
+
       <div v-if="error" class="error">{{ error }}</div>
       <div v-if="success" class="success">✅ 连接成功！开始和你的蛋聊天吧</div>
 
