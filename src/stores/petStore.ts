@@ -1,6 +1,6 @@
 import { reactive, computed, ref } from "vue";
 import { httpFetch } from "../lib/http";
-import { MBTI_LIST, getPersonality, getColor, getPersonalityPrompt } from "../data/personalities";
+import { getPersonality, getColor, getPersonalityPrompt } from "../data/personalities";
 import { analyzeConversation, type MbtiAnalysis } from "../lib/mbti-analysis";
 
 export interface Message {
@@ -30,10 +30,6 @@ interface PetState {
   /** 今日晚安是否已加分 */
   nightDone: boolean;
 }
-
-// 16 种类型与配色统一由 data/personalities.ts 提供
-// （旧版本这里手写的数组只有 14 种，漏了 ISFP / ESFP，永远抽不到）
-const MBTI_TYPES = MBTI_LIST;
 
 function loadState(): Partial<PetState> {
   try {
