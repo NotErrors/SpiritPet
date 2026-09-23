@@ -14,10 +14,10 @@
     </div>
     <div class="chat-input">
       <input
+        ref="inputEl"
         v-model="input"
         @keydown.enter="send"
         placeholder="说点什么..."
-        :disabled="loading"
       />
       <button @click="send" :disabled="loading || !input.trim()">发送</button>
     </div>
@@ -25,10 +25,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, watch } from "vue";
+import { ref, nextTick, watch, onMounted } from "vue";
 import { pet, chat } from "../stores/petStore";
 
-const props = defineProps<{
+defineProps<{
   stage: string;
   mbti: string;
   messages: { role: string; content: string }[];
@@ -39,20 +39,33 @@ defineEmits<{ close: [] }>();
 const input = ref("");
 const loading = ref(false);
 const msgList = ref<HTMLElement | null>(null);
+const inputEl = ref<HTMLInputElement | null>(null);
+
+/** 把焦点交回输入框，保证能连续输入 */
+async function focusInput() {
+  await nextTick();
+  inputEl.value?.focus();
+}
 
 async function send() {
   const text = input.value.trim();
   if (!text || loading.value) return;
   input.value = "";
   loading.value = true;
+  // 注意：输入框不设 disabled（禁用会让浏览器自动夺走焦点，且重新启用不会还原）
+  // 等待期间用户可以继续打字，send 函数本身已做 loading 拦截
   await chat(text);
   loading.value = false;
+  focusInput();
 }
 
 watch(() => pet.messages.length, async () => {
   await nextTick();
   if (msgList.value) msgList.value.scrollTop = msgList.value.scrollHeight;
 });
+
+// 打开聊天面板时自动聚焦，可直接打字
+onMounted(focusInput);
 </script>
 
 <style scoped>
