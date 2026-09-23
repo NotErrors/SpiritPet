@@ -54,7 +54,7 @@ defineProps<{
   align-items: center;
   gap: 4px;
   user-select: none;
-  cursor: pointer;
+  cursor: grab;
 }
 .pet-body {
   width: 60px;
@@ -65,7 +65,7 @@ defineProps<{
   justify-content: center;
   animation: breathe 3s ease-in-out infinite;
   transition: background-color 0.5s;
-  cursor: pointer;
+  cursor: grab;
 }
 .pet-body.petting {
   animation: petHop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);

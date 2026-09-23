@@ -272,13 +272,18 @@ html, body, #app {
   display: flex;
   flex-direction: column;
   align-items: center;
-  cursor: pointer;
+  cursor: grab;
 }
-/* 悬停变手型：覆盖窗口拖动区(drag)的默认光标 */
+/* 悬停变手掌：覆盖窗口拖动区(drag)的默认光标 */
 .pet-area,
 .pet-area * {
-  cursor: pointer !important;
+  cursor: grab !important;
   -webkit-app-region: no-drag;
+}
+/* 按住时握拳 */
+.pet-area:active,
+.pet-area *:active {
+  cursor: grabbing !important;
 }
 
 .chat-wrapper {

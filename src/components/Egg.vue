@@ -75,13 +75,13 @@ const isShaking = computed(() => props.intimacy >= 25 && !props.petting);
   align-items: center;
   gap: 8px;
   user-select: none;
-  cursor: pointer;
+  cursor: grab;
 }
 .egg-svg {
   width: 80px;
   height: 96px;
   transition: filter 0.5s;
-  cursor: pointer;
+  cursor: grab;
 }
 .egg-svg.shaking {
   animation: shake 0.5s ease-in-out infinite;
