@@ -1,6 +1,6 @@
 import { reactive, computed, ref } from "vue";
 import { httpFetch } from "../lib/http";
-import { getPersonality, getColor, getPersonalityPrompt } from "../data/personalities";
+import { getPersonality, getColor, getPersonalityPrompt, isKnownMbti } from "../data/personalities";
 import { analyzeConversation, type MbtiAnalysis } from "../lib/mbti-analysis";
 
 export interface Message {
@@ -66,6 +66,45 @@ function defaults(): PetState {
 
 const ALL_KEYS = Object.keys(defaults()) as (keyof PetState)[];
 
+/** 单条消息的形状校验 */
+function isMessage(m: unknown): m is Message {
+  if (!m || typeof m !== "object") return false;
+  const msg = m as Message;
+  return (msg.role === "user" || msg.role === "assistant") && typeof msg.content === "string";
+}
+
+const isNum = (v: unknown) => typeof v === "number" && Number.isFinite(v);
+const isStr = (v: unknown) => typeof v === "string";
+const isBool = (v: unknown) => typeof v === "boolean";
+
+/**
+ * 逐字段的值校验。
+ *
+ * 只校验「字段在不在」是不够的：存档被改坏、或被旧版本写过之后，
+ * 字段可能**存在但值非法**，而 `{ ...defaults(), ...saved }` 会照单全收。
+ * 最隐蔽的一种是 mbti —— 大小写不对时界面照样把它显示出来，
+ * 但 getPersonality() 精确匹配不上会回退成 INFP，
+ * 于是出现「界面显示 ESTP、它说话却是 INFP 味」的错位。
+ *
+ * 所以非法值一律当作「没有这个字段」，交给 defaults() 兜底。
+ */
+const VALIDATORS: { [K in keyof PetState]?: (v: unknown) => boolean } = {
+  stage: (v) => v === "egg" || v === "pet",
+  intimacy: isNum,
+  mbti: (v) => v === null || isKnownMbti(v),
+  messages: (v) => Array.isArray(v) && v.every(isMessage),
+  apiKey: isStr,
+  model: isStr,
+  baseUrl: isStr,
+  jevKey: isStr,
+  jevBaseUrl: isStr,
+  lastPetTime: isNum,
+  lastActiveDate: isStr,
+  dailyChatCount: isNum,
+  greetDone: isBool,
+  nightDone: isBool,
+};
+
 function loadState(): Partial<PetState> {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -77,10 +116,12 @@ function loadState(): Partial<PetState> {
     const src = parsed as Record<string, unknown>;
     const out: Partial<PetState> = {};
     for (const k of ALL_KEYS) {
-      if (k in src) (out as Record<string, unknown>)[k] = src[k];
+      if (TRANSIENT_KEYS.has(k)) continue;      // 瞬时字段不读存档，永远用默认值
+      if (!(k in src)) continue;
+      const check = VALIDATORS[k];
+      if (check && !check(src[k])) continue;    // 值非法 → 当作没有，走默认值
+      (out as Record<string, unknown>)[k] = src[k];
     }
-    // 数组字段单独校验：取值损坏会让渲染直接崩，宁可丢掉重新开始
-    if (!Array.isArray(out.messages)) delete out.messages;
     return out;
   } catch {
     return {};

@@ -322,10 +322,28 @@ export const PERSONALITIES: Record<string, Personality> = {
 /** 全部 16 种类型（顺序固定，便于随机与展示） */
 export const MBTI_LIST: string[] = Object.keys(PERSONALITIES);
 
-/** 取人格定义，查不到时兜底 */
+/** 是否是已知的 16 型之一。用于校验存档这类外部输入，别让坏值一路流到展示层 */
+export function isKnownMbti(v: unknown): v is string {
+  return typeof v === "string" && Object.prototype.hasOwnProperty.call(PERSONALITIES, v);
+}
+
+/**
+ * 取人格定义，查不到时兜底到 INFP。
+ *
+ * 兜底本身是必要的：蛋期还没有性格，传进来就是 null。
+ * 但「传进来一个不是 16 型之一的值」和「还没性格」是两回事，必须出声区分。
+ * 静默回退的后果很隐蔽：界面照着显示那个坏值，说话用的却是 INFP，
+ * 两边对不上，事后还查不出原因。
+ */
 export function getPersonality(mbti: string | null): Personality {
-  const p = mbti ? PERSONALITIES[mbti] : null;
-  return p || PERSONALITIES.INFP;
+  if (mbti) {
+    // 必须走 isKnownMbti 而不是直接 PERSONALITIES[mbti] 取真值判断：
+    // 后者对 "constructor" / "toString" 这类原型链上的键会返回 truthy 的函数，
+    // 于是把 Object 当成人格定义返回出去。
+    if (isKnownMbti(mbti)) return PERSONALITIES[mbti];
+    console.warn("[SpiritPet] 未知的人格类型 \"" + mbti + "\"，已回退到 INFP");
+  }
+  return PERSONALITIES.INFP;
 }
 
 /** 主色 */
