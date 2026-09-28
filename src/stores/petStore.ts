@@ -288,51 +288,6 @@ export async function callJevRouter(userInput: string): Promise<string | null> {
   }
 }
 
-// ==================== 时间感知 ====================
-
-/**
- * 组装当前时间上下文，注入 system prompt。
- *
- * 模型自身没有时钟：不注入的话它会把"现在"当成训练数据截止的那一天，
- * 于是半夜跟你说早安、把几年前的旧闻当成今天的事。
- * 这是纯本地信息，零成本，但对桌宠的"活着感"影响很大。
- */
-function timeContext(): string {
-  const now = new Date();
-  const WEEK = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const h = now.getHours();
-  const date =
-    now.getFullYear() + "-" + pad(now.getMonth() + 1) + "-" + pad(now.getDate());
-
-  // 时段分得细一点，宠物才好自然用上：半夜该说晚安，而不是"下午好"
-  const period =
-    h < 5 ? "深夜" : h < 8 ? "清晨" : h < 11 ? "上午" : h < 13 ? "中午"
-    : h < 17 ? "下午" : h < 19 ? "傍晚" : h < 23 ? "晚上" : "深夜";
-
-  const lines = [
-    "【当前时间】" + date + " " + WEEK[now.getDay()] + " " + pad(h) + ":" + pad(now.getMinutes()) + "（" + period + "）",
-  ];
-
-  // 距上次对话多久 —— 有了它宠物才能说"好久不见"，
-  // 而不是每次重逢都装作没分开过。
-  // 注意 chat() 会先把本条用户消息入队，所以这里要往前取两条。
-  const prev = pet.messages[pet.messages.length - 2];
-  if (prev) {
-    const gapMin = (Date.now() - prev.timestamp) / 60000;
-    if (gapMin >= 60) {
-      lines.push(
-        "【距上次聊天】" +
-          (gapMin < 1440
-            ? Math.floor(gapMin / 60) + " 小时"
-            : Math.floor(gapMin / 1440) + " 天") +
-          "（重逢时可以自然地带一句，但别刻意煽情）"
-      );
-    }
-  }
-
-  return lines.join("\n");
-}
 export async function chat(userInput: string): Promise<string> {
   addMessage("user", userInput);
 
@@ -357,17 +312,13 @@ export async function chat(userInput: string): Promise<string> {
     "你们还不太熟，稍微含蓄一点，不要过分热情。";
 
   const persona = getPersonality(pet.mbti);
-  const timeCtx = timeContext();
-
   const systemPrompt = pet.stage === "egg"
-    ? "你是一枚神秘的宠物蛋。你还没有破壳，但已经能感受到主人的温暖。说话要简短、模糊、带点神秘感。每次只说 1-2 句话。\n" +
-      timeCtx + extraHint
+    ? "你是一枚神秘的宠物蛋。你还没有破壳，但已经能感受到主人的温暖。说话要简短、模糊、带点神秘感。每次只说 1-2 句话。" + extraHint
     : persona.prompt +
       "\n" +
       "你是一只桌面宠物，性格类型 " + persona.mbti + "（" + persona.title + "）。\n" +
       bondTone + "\n" +
       "当前亲密度：" + pet.intimacy + "。\n" +
-      timeCtx + "\n" +
       "【最重要的规则】每次只说 1-2 句话，严格保持上面那种说话方式和标点习惯。" +
       "不要长篇大论，不要用列表，不要说教。" + extraHint;
 
