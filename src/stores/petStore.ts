@@ -31,51 +31,77 @@ interface PetState {
   nightDone: boolean;
 }
 
+const STORAGE_KEY = "spiritpet_state";
+
+/** 纯 UI 瞬时状态，不落盘：重启后应当回到默认值 */
+const TRANSIENT_KEYS = new Set<keyof PetState>(["chatOpen"]);
+
+/**
+ * 全部字段的默认值 —— 同时充当持久化白名单。
+ *
+ * 新增状态字段只要加在这里，存取两端会自动跟上，
+ * 不会再出现「加了字段忘了存 / 忘了读」这类 bug。
+ * 此前 jevKey、jevBaseUrl、lastPetTime、messages 都因此丢过，
+ * 所以不再手写两份字段列表。
+ */
+function defaults(): PetState {
+  return {
+    stage: "egg",
+    intimacy: 0,
+    mbti: null,
+    messages: [],
+    apiKey: "",
+    model: "gpt-4o-mini",
+    baseUrl: "https://api.openai.com",
+    jevKey: "",
+    jevBaseUrl: "https://api.typesafe.ai",
+    chatOpen: false,
+    lastPetTime: 0,
+    lastActiveDate: "",
+    dailyChatCount: 0,
+    greetDone: false,
+    nightDone: false,
+  };
+}
+
+const ALL_KEYS = Object.keys(defaults()) as (keyof PetState)[];
+
 function loadState(): Partial<PetState> {
   try {
-    const saved = localStorage.getItem("spiritpet_state");
-    if (saved) return JSON.parse(saved);
-  } catch {}
-  return {};
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return {};
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return {};
+
+    // 只认已知字段：结构变更或存档损坏时，未知字段丢弃、缺失字段回退默认值
+    const src = parsed as Record<string, unknown>;
+    const out: Partial<PetState> = {};
+    for (const k of ALL_KEYS) {
+      if (k in src) (out as Record<string, unknown>)[k] = src[k];
+    }
+    // 数组字段单独校验：取值损坏会让渲染直接崩，宁可丢掉重新开始
+    if (!Array.isArray(out.messages)) delete out.messages;
+    return out;
+  } catch {
+    return {};
+  }
 }
 
 function saveState(state: PetState) {
-  localStorage.setItem("spiritpet_state", JSON.stringify({
-    stage: state.stage,
-    intimacy: state.intimacy,
-    mbti: state.mbti,
-    apiKey: state.apiKey,
-    model: state.model,
-    baseUrl: state.baseUrl,
-    jevKey: state.jevKey,
-    jevBaseUrl: state.jevBaseUrl,
-    lastPetTime: state.lastPetTime,
-    lastActiveDate: state.lastActiveDate,
-    dailyChatCount: state.dailyChatCount,
-    greetDone: state.greetDone,
-    nightDone: state.nightDone,
-  }));
+  const data: Record<string, unknown> = {};
+  for (const k of ALL_KEYS) {
+    if (TRANSIENT_KEYS.has(k)) continue;
+    data[k] = state[k];
+  }
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch {
+    // 存档写不进去（配额满/隐私模式）不该让聊天本身失败
+  }
 }
 
-const saved = loadState();
-
-export const pet = reactive<PetState>({
-  stage: saved.stage || "egg",
-  intimacy: saved.intimacy || 0,
-  mbti: saved.mbti || null,
-  messages: [],
-  apiKey: saved.apiKey || "",
-  jevKey: saved.jevKey || "",
-  jevBaseUrl: saved.jevBaseUrl || "https://api.typesafe.ai",
-  model: saved.model || "gpt-4o-mini",
-  baseUrl: saved.baseUrl || "https://api.openai.com",
-  chatOpen: false,
-  lastPetTime: saved.lastPetTime || 0,
-  lastActiveDate: saved.lastActiveDate || "",
-  dailyChatCount: saved.dailyChatCount || 0,
-  greetDone: saved.greetDone || false,
-  nightDone: saved.nightDone || false,
-});
+// defaults() 每次返回全新对象（messages 是新数组），铺开安全，不会共享引用
+export const pet = reactive<PetState>({ ...defaults(), ...loadState() });
 
 export const hasApiKey = computed(() => pet.apiKey.length > 0);
 export const hasJevKey = computed(() => pet.jevKey.length > 0);
@@ -223,7 +249,11 @@ export function saveConfig(key: string, model: string, baseUrl: string, jevKey?:
 
 export function addMessage(role: "user" | "assistant", content: string) {
   pet.messages.push({ role, content, timestamp: Date.now() });
+  // 只保留最近 50 条，避免 localStorage 无限膨胀
   if (pet.messages.length > 50) pet.messages.shift();
+  // 关键：每落一条就存盘，否则重启即丢。
+  // 用户消息与宠物回复各触发一次，两次写入开销可忽略
+  saveState(pet);
 }
 
 export async function callJevRouter(userInput: string): Promise<string | null> {
