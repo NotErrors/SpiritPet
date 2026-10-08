@@ -368,7 +368,12 @@ export async function chat(userInput: string): Promise<string> {
   const body = JSON.stringify({
     model: pet.model,
     messages: [{ role: "system", content: systemPrompt }, ...msgs],
-    max_tokens: 300,
+    // 300 曾经导致回复变成 (no response)：deepseek-flash 是推理型模型，
+    // 思考过程也占 max_tokens 额度。简单对话思考只要 60~90 token 够用，
+    // 但涉及情绪冲突、多轮指令这类要长思考的对话，思考本身就要 300~700，
+    // 300 会被思考吃光，正文一个字不剩（实测 3/3 复现，300→2000 后 3/3 恢复）。
+    // 宠物只回 1-2 句话（约 20 token），抬高的额度只在需要思考时才被用掉。
+    max_tokens: 2000,
     temperature: 0.8,
   });
 
@@ -407,7 +412,32 @@ export async function chat(userInput: string): Promise<string> {
 
     if (!data) throw new Error(errs.join(" | "));
 
-    const reply = data.choices?.[0]?.message?.content || "(no response)";
+    const choice = data.choices?.[0];
+    let reply: string = choice?.message?.content ?? "";
+
+    if (!reply.trim()) {
+      // 走到这里说明 HTTP 是成功的（200），但模型没吐出正文。
+      // 原实现直接显示 (no response)，一条线索都不留，等于事发后完全无法定位。
+      // 这里把能用来判断原因的字段全部带出来，并保留完整响应到控制台。
+      const reasoningTokens = data.usage?.completion_tokens_details?.reasoning_tokens;
+      const facts = [
+        "finish_reason=" + String(choice?.finish_reason),
+        "choices=" + (Array.isArray(data.choices) ? data.choices.length : "无"),
+        "思考长度=" + (typeof choice?.message?.reasoning_content === "string" ? choice.message.reasoning_content.length + "字" : "无") +
+          (reasoningTokens ? "（" + reasoningTokens + " token）" : ""),
+        "顶层字段=" + Object.keys(data).join("/"),
+      ];
+      console.error("[SpiritPet] 模型返回了空内容 → " + facts.join(" | "), data);
+
+      if (choice?.finish_reason === "length") {
+        // 最常见的两种：推理型模型把 max_tokens 全花在思考上，正文一个字没剩
+        reply = "（话说到一半就断了 —— 输出上限被用光，推理型模型尤其容易这样）";
+      } else if (typeof choice?.message?.reasoning_content === "string" && choice.message.reasoning_content) {
+        reply = "（模型只输出了思考过程，没有给出正文）";
+      } else {
+        reply = "（模型返回了空内容：" + facts.join("，") + "）";
+      }
+    }
 
     addMessage("assistant", reply);
 
