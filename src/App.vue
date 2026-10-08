@@ -104,7 +104,8 @@ function appWindow() {
 const isTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 const stage = ref(pet.stage);
-const intimacy = ref(pet.intimacy);
+// 展示用整数：内部保留小数做比例衰减，否则跨天会显示成 97.2833…
+const intimacy = ref(Math.floor(pet.intimacy));
 const mbti = ref(pet.mbti);
 const chatOpen = ref(false);
 const showCeremony = ref(false);
@@ -161,7 +162,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeyDown));
 // 注意：这里先不真的破壳，要等仪式播到「爆裂」那一刻才提交状态，
 // 否则蛋会在用户看到之前就消失，整个仪式就没意义了
 watch(() => pet.intimacy, (val) => {
-  intimacy.value = val;
+  intimacy.value = Math.floor(val);   // 只影响展示，破壳判定仍用原始值
   if (pet.stage === "egg" && val >= 30 && !showCeremony.value) {
     showCeremony.value = true;
   }

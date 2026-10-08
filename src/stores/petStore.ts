@@ -1,12 +1,26 @@
 import { reactive, computed, ref } from "vue";
 import { httpFetch } from "../lib/http";
 import { getPersonality, getColor, getPersonalityPrompt, isKnownMbti } from "../data/personalities";
+import {
+  FORMS, formForIntimacy, rollBranch, getForm, getBranch,
+  type FormDef, type FormLevel, type EvolveBranch, type RecentActivity,
+} from "../data/evolution";
 import { analyzeConversation, type MbtiAnalysis } from "../lib/mbti-analysis";
 
 export interface Message {
   role: "user" | "assistant";
   content: string;
   timestamp: number;
+}
+
+/** 每日互动记录，供进化时判断「主人最近怎么对它」（§5.2） */
+export interface DayRecord {
+  /** YYYY-MM-DD */
+  d: string;
+  /** 当天对话轮数 */
+  n: number;
+  /** 当天问候（早安/晚安）次数 */
+  g: number;
 }
 
 interface PetState {
@@ -29,6 +43,12 @@ interface PetState {
   greetDone: boolean;
   /** 今日晚安是否已加分 */
   nightDone: boolean;
+  /** 当前形态（§4.5）。破壳后为 baby，随亲密度逐级进化 */
+  form: FormLevel;
+  /** 最近一次进化的方向（§5.2）。还没进化过时为 null */
+  branch: EvolveBranch | null;
+  /** 近 30 天的每日互动记录，进化时用来判断主人怎么对它 */
+  history: DayRecord[];
 }
 
 const STORAGE_KEY = "spiritpet_state";
@@ -61,6 +81,9 @@ function defaults(): PetState {
     dailyChatCount: 0,
     greetDone: false,
     nightDone: false,
+    form: "baby",
+    branch: null,
+    history: [],
   };
 }
 
@@ -103,6 +126,10 @@ const VALIDATORS: { [K in keyof PetState]?: (v: unknown) => boolean } = {
   dailyChatCount: isNum,
   greetDone: isBool,
   nightDone: isBool,
+  form: (v) => typeof v === "string" && FORMS.some(f => f.id === v),
+  branch: (v) => v === null || v === "positive" || v === "balanced" || v === "negative" || v === "rare",
+  history: (v) => Array.isArray(v) && v.every(r => !!r && typeof r === "object"
+    && typeof (r as DayRecord).d === "string" && isNum((r as DayRecord).n) && isNum((r as DayRecord).g)),
 };
 
 function loadState(): Partial<PetState> {
@@ -149,6 +176,17 @@ export const hasJevKey = computed(() => pet.jevKey.length > 0);
 export const intimacyPercent = computed(() => Math.min(100, (pet.intimacy / 30) * 100));
 export const mbtiColor = computed(() => getColor(pet.mbti));
 
+/**
+ * 对外展示用的整数值。
+ *
+ * 亲密度内部保留小数，因为跨天衰减是「× 0.5%」的比例计算。
+ * 如果每步都取整，低数值区会严重失真：亲密度 1 的 0.5% 本该是 0.005，
+ * 取整后却变成整整扣掉 1 点（相当于 100%），于是「每天只聊一句」的用户
+ * 永远卡在 1 —— 连破壳都到不了（实测连续 400 天都停在 1）。
+ * 所以只在显示时取整，内部保留小数。
+ */
+export const intimacyDisplay = computed(() => Math.floor(pet.intimacy));
+
 
 
 /** 重新养一只：清空进度回到蛋阶段 */
@@ -156,6 +194,10 @@ export function resetPet() {
   pet.stage = "egg";
   pet.intimacy = 0;
   pet.mbti = null;
+  pet.form = "baby";
+  pet.branch = null;
+  pet.history = [];
+  pendingEvolution.value = null;
   pet.messages = [];
   pet.lastPetTime = 0;
   pet.lastActiveDate = "";
@@ -215,13 +257,50 @@ function rolloverDay() {
     const prev = new Date(pet.lastActiveDate + "T00:00:00").getTime();
     const now = new Date(today + "T00:00:00").getTime();
     const days = Math.max(1, Math.round((now - prev) / 86400000));
-    pet.intimacy = Math.floor(pet.intimacy * Math.pow(DAILY_DECAY, days));
+    // 不取整：保持「比例衰减」的本意（理由见 intimacyDisplay 的注释）
+    pet.intimacy = pet.intimacy * Math.pow(DAILY_DECAY, days);
   }
 
   pet.lastActiveDate = today;
   pet.dailyChatCount = 0;
   pet.greetDone = false;
   pet.nightDone = false;
+}
+
+/** 每日互动记录只保留最近 30 天 */
+const HISTORY_DAYS = 30;
+
+function todayRecord(): DayRecord {
+  const t = todayStr();
+  let r = pet.history.find(x => x.d === t);
+  if (!r) {
+    r = { d: t, n: 0, g: 0 };
+    pet.history.push(r);
+    if (pet.history.length > HISTORY_DAYS) {
+      pet.history.sort((a, b) => (a.d < b.d ? -1 : 1));
+      pet.history = pet.history.slice(-HISTORY_DAYS);
+    }
+  }
+  return r;
+}
+
+/**
+ * 汇总近 days 天的互动情况，供 roll 进化分支用（§5.2 第 1 步）。
+ *
+ * 分母用 days 而不是「有记录的天数」—— 完全没互动的日子也该拉低平均值，
+ * 否则一周只聊一天的人会被算成"每天都聊"。
+ */
+export function recentActivity(days = 7): RecentActivity {
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - (days - 1) * 86400000);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const cut = cutoff.getFullYear() + "-" + pad(cutoff.getMonth() + 1) + "-" + pad(cutoff.getDate());
+  const recent = pet.history.filter(r => r.d >= cut);
+  return {
+    activeDays: recent.filter(r => r.n > 0).length,
+    avgRounds: recent.reduce((s, r) => s + r.n, 0) / days,
+    greetings: recent.reduce((s, r) => s + r.g, 0),
+  };
 }
 
 const MORNING_WORDS = ["早安", "早上好", "早啊", "早呀", "morning"];
@@ -239,6 +318,7 @@ export function chatReward(): boolean {
     return false;
   }
   pet.dailyChatCount++;
+  todayRecord().n++;
   addIntimacy(pet.stage === "egg" ? EGG_CHAT_GAIN : 1);
   return true;
 }
@@ -252,11 +332,13 @@ export function greetReward(text: string): string | null {
   const t = text.toLowerCase();
   if (!pet.greetDone && MORNING_WORDS.some(w => t.includes(w))) {
     pet.greetDone = true;
+    todayRecord().g++;
     addIntimacy(3);
     return "morning";
   }
   if (!pet.nightDone && NIGHT_WORDS.some(w => t.includes(w))) {
     pet.nightDone = true;
+    todayRecord().g++;
     addIntimacy(3);
     return "night";
   }
@@ -265,6 +347,54 @@ export function greetReward(text: string): string | null {
 
 /** 破壳时的性格分析结果，供破壳仪式展示「它为什么长成这样」 */
 export const hatchAnalysis = ref<MbtiAnalysis | null>(null);
+
+/**
+ * 待播放的进化结果。
+ *
+ * 和破壳同一套路：先算出结果放这里，等 App.vue 把仪式播到"变身"那一刻
+ * 才调 commitEvolution 真正提交 —— 否则形态会在用户看到动画之前就变了，
+ * 整个仪式就没意义了。
+ */
+export const pendingEvolution = ref<{ form: FormDef; branch: EvolveBranch } | null>(null);
+
+/**
+ * 检查是否该进化（§5.2）。
+ *
+ * 判定分两步：
+ *   1. 门槛：亲密度到了下一级的阈值（FORM.level.threshold）
+ *   2. 方向：按主人近 7 天的互动方式 roll 一次（§5.2 第 1~4 步）
+ *
+ * @returns true = 有进化待播放
+ */
+export function checkEvolution(): boolean {
+  if (pet.stage !== "pet") return false;          // 蛋期不进化
+  if (pendingEvolution.value) return false;       // 已有一个待播放的，别重复触发
+
+  const curIdx = FORMS.findIndex(f => f.id === pet.form);
+  const wantIdx = FORMS.findIndex(f => f.id === formForIntimacy(pet.intimacy).id);
+  if (wantIdx <= curIdx) return false;
+
+  pendingEvolution.value = {
+    form: FORMS[wantIdx],
+    branch: rollBranch(recentActivity(7)),
+  };
+  return true;
+}
+
+/** 仪式播到"变身"那一刻才提交进化结果 */
+export function commitEvolution(): boolean {
+  const p = pendingEvolution.value;
+  if (!p) return false;
+  pet.form = p.form.id;
+  pet.branch = p.branch;
+  pendingEvolution.value = null;
+  saveState(pet);
+  return true;
+}
+
+/** 供 UI 展示当前形态与方向 */
+export const currentForm = computed(() => getForm(pet.form));
+export const currentBranch = computed(() => getBranch(pet.branch));
 
 export function tryHatch(): boolean {
   if (pet.intimacy >= 30 && pet.stage === "egg") {
@@ -359,7 +489,7 @@ export async function chat(userInput: string): Promise<string> {
       "\n" +
       "你是一只桌面宠物，性格类型 " + persona.mbti + "（" + persona.title + "）。\n" +
       bondTone + "\n" +
-      "当前亲密度：" + pet.intimacy + "。\n" +
+      "当前亲密度：" + Math.floor(pet.intimacy) + "。\n" +
       "【最重要的规则】每次只说 1-2 句话，严格保持上面那种说话方式和标点习惯。" +
       "不要长篇大论，不要用列表，不要说教。" + extraHint;
 
